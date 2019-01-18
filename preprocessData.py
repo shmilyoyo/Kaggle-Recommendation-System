@@ -7,6 +7,10 @@ import math
 import random
 import sklearn
 from sklearn.model_selection import train_test_split
+from sklearn.feature_extraction.text import TfidfVectorizer
+from nltk.corpus import stopwords
+from sklearn.metrics.pairwise import cosine_similarity
+from scipy.sparse.linalg import svds
 from pathlib import Path
 
 
@@ -73,7 +77,7 @@ def mungingData(inputDataRootPath, outputDataRootPath):
     interactions_test_indexed_df = interactions_test_df.set_index("personId")
 
     return interactions_full_indexed_df, interactions_train_indexed_df,\
-        interactions_test_indexed_df
+        interactions_test_indexed_df, interactions_full_df
 
 
 # aggregate number of interactions between personId and contentId
@@ -83,15 +87,42 @@ def smooth_user_preference(x):
 # get item associated with person
 
 
-def get_items_interacted(person_id, interactions_df):
-    interacted_items = interactions_df.loc[person_id]["contentId"]
+def get_items_interacted(person_id, interactions_indexed_df):
+    interacted_items = interactions_indexed_df.loc[person_id]["contentId"]
     return set(interacted_items if type(interacted_items) == pd.Series
                else [interacted_items])
 
 
-def getItemPopularityDf(interactions):
-    item_popularity_df = interactions.groupby(
+def getItemPopularityDf(interactions_indexed_df):
+    item_popularity_df = interactions_indexed_df.groupby(
         "contentId")["eventStrength"].sum().sort_values(
             ascending=False).reset_index()
 
     return item_popularity_df
+
+
+def getStopWords(tps=['english', 'portuguese']):
+    stopwords_list = []
+    for tp in tps:
+        stopwords_list += stopwords.words(tp)
+
+    return stopwords_list
+
+def getVectorizer(tp, stopwords_list):
+    if tp == "tfidf":
+        vectorizer = TfidfVectorizer(analyzer="word",
+            ngram_range=(1, 2), 
+            min_df=0.003,
+            max_df=0.5,
+            max_features=5000,
+            stop_words=stopwords_list)
+    
+    return vectorizer
+
+def getMatrix(data, vectorizer_type="tfidf"):
+    stopwords_list = getStopWords()
+    vectorizer = getVectorizer(
+        vectorizer_type, stopwords_list)
+    matrix = vectorizer.fit_transform(data)
+
+    return matrix
