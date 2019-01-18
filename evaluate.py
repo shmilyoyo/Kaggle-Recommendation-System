@@ -21,10 +21,10 @@ class ModelEvaluator:
             interactions_test_indexed_df {pd.DataFrame} -- testing interactions DataFrame
         """
 
+        self.articles_df = articles_df
         self.interactions_full_indexed_df = interactions_full_indexed_df
         self.interactions_train_indexed_df = interactions_train_indexed_df
         self.interactions_test_indexed_df = interactions_test_indexed_df
-        self.articles_df = articles_df
 
     def get_not_interacted_item_samples(self, person_id,
                                         sample_size, seed=1):
@@ -68,7 +68,7 @@ class ModelEvaluator:
             index = next(i for i, c in enumerate(
                 recommend_items) if c == item_id)
         except:
-            index - 1
+            index = - 1
 
         hit = int(index in range(topn))
 
@@ -106,16 +106,16 @@ class ModelEvaluator:
         # for each item the user has interacted in test set
         for item_id in person_interacted_item_testset:
             non_interacted_items_samples = self.get_not_interacted_item_samples(
-                person_id, self.articles_df,
+                person_id,
                 sample_size=EVAL_RANDOM_SAMPLE_NON_INTERACTED_ITEMS,
                 seed=item_id % (2 ** 32))
             # combining the current interacted item with the 100 random samples
             item_to_filter_recs = non_interacted_items_samples.union(
                 set([item_id]))
-            # filtering recommendations that from item_to_filter_recs
+            # filtering recommendations that are from item_to_filter_recs
             valid_recs_df = person_recs_df[person_recs_df["contentId"].isin(
                 item_to_filter_recs)]
-            valid_recs = valid_recs_df["contentId"].values()
+            valid_recs = valid_recs_df["contentId"].values
 
             # verifying if current interacted item is among the Top-N recommended items
             hits_at_5, index_at_5 = self._verify_hit_top_n(
@@ -154,15 +154,16 @@ class ModelEvaluator:
             person_metrics["_person_id"] = person_id
             people_metrics.append(person_metrics)
 
-            print("%d users processed" % idx)
+            if idx % 100 == 0:
+                print("%d users processed" % idx)
 
         people_metrics_df = pd.DataFrame(people_metrics).sort_values(
             'interacted_count', ascending=False)
 
         # global metrics
-        global_recall_at_5 = people_metrics_df["hit@5_count"].sum(
+        global_recall_at_5 = people_metrics_df["hits@5_count"].sum(
         ) / people_metrics_df["interacted_count"].sum()
-        global_recall_at_10 = people_metrics_df["hit@10_count"].sum(
+        global_recall_at_10 = people_metrics_df["hits@10_count"].sum(
         ) / people_metrics_df["interacted_count"].sum()
 
         global_metrics = {"modelName": model.get_model_name(),

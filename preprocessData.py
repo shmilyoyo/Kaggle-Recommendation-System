@@ -15,10 +15,6 @@ def mungingData(inputDataRootPath, outputDataRootPath):
     outputDataRootPath = Path(outputDataRootPath)
 
     # load data
-    articles_df = pd.read_csv(str(inputDataRootPath / "shared_articles.csv"))
-    articles_df = articles_df[articles_df['eventType']
-                              == "CONTENT SHARED"]
-
     interactions_df = pd.read_csv(
         str(inputDataRootPath / "users_interactions.csv"))
 
@@ -55,6 +51,8 @@ def mungingData(inputDataRootPath, outputDataRootPath):
         users_enough_interactions_cnt_df, how="right", left_on="personId",
         right_on="personId")
 
+    print('# of interactions from users with at least 5 interactions: %d' %
+          len(interactions_from_selected_users_df))
     """
     aggregate # of interactions
     """
@@ -65,7 +63,7 @@ def mungingData(inputDataRootPath, outputDataRootPath):
 
     interactions_train_df, interactions_test_df = train_test_split(
         interactions_full_df, stratify=interactions_full_df["personId"],
-        test_size=0.2, random_state=1)
+        test_size=0.20, random_state=1)
     print("# of interactions on Train set: {}".format(len(interactions_train_df)))
     print("# of interactions on Test set: {}".format(len(interactions_test_df)))
 
@@ -89,3 +87,11 @@ def get_items_interacted(person_id, interactions_df):
     interacted_items = interactions_df.loc[person_id]["contentId"]
     return set(interacted_items if type(interacted_items) == pd.Series
                else [interacted_items])
+
+
+def getItemPopularityDf(interactions):
+    item_popularity_df = interactions.groupby(
+        "contentId")["eventStrength"].sum().sort_values(
+            ascending=False).reset_index()
+
+    return item_popularity_df
