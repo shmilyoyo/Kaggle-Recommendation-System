@@ -3,6 +3,7 @@ import preprocessData
 from popularityModel import PopularityModel
 from evaluate import ModelEvaluator
 from profile import Profile
+from contentBasedModel import ContentBasedModel
 
 inputDataRootPath = "/data/haoxu/Data/Kaggle-Recommendation-Dataset"
 outputDataRootPath = "/data/haoxu/Data/Kaggle-Recommendation-Dataset"
@@ -13,9 +14,9 @@ articles_df = articles_df[articles_df['eventType'] == "CONTENT SHARED"]
 # test preprocessData Module
 interactions_full_indexed_df, interactions_train_indexed_df, \
     interactions_test_indexed_df, interactions_full_df = preprocessData.mungingData(inputDataRootPath,
-                                                              outputDataRootPath)
+                                                                                    outputDataRootPath)
 
-"""# person_id = -8845298781299428018
+# person_id = -8845298781299428018
 # print(preprocessData.get_items_interacted(person_id, interactions_full_indexed_df))
 
 # model evaluator
@@ -24,7 +25,7 @@ model_evaluator = ModelEvaluator(articles_df, interactions_test_indexed_df,
                                  interactions_test_indexed_df,
                                  )
 
-# test PopularityModel Module
+"""# test PopularityModel Module
 item_popularity_df = preprocessData.getItemPopularityDf(
     interactions_full_indexed_df)
 
@@ -47,5 +48,12 @@ tfidf_matrix = preprocessData.getMatrix(
 content_ids = articles_df['contentId'].tolist()
 
 profile = Profile(content_ids, tfidf_matrix, interactions_full_df, articles_df)
-p = profile.build_users_profiles()
-print(len(p))
+users_profiles = profile.build_users_profiles()
+
+# test Content-based Module
+content_based_model = ContentBasedModel(
+    "content-based", item_ids, users_profiles, tfidf_matrix)
+
+print("Evaluating Content-Based Filtering Model...")
+cb_global_metrics, cb_detailed_results_df = model_evaluator.evaluate_model(content_based_model)
+print("Global Metrics: \n {}".format(cb_global_metrics))
