@@ -60,7 +60,7 @@ class ContentBasedModel(BaseModel):
         Keyword Arguments:
             items_to_ignore {list} -- a list of items that user has already visited (default: {[]})
             topn {int} -- the number of final recommendation (default: {10})
-            verbose {bool} -- indicate whether add default items to result (default: {False})
+            verbose {bool} -- indicate whether add items extra information (default: {False})
         
         Raises:
             Exception -- if want to use verbose mode, the items_df should be provided

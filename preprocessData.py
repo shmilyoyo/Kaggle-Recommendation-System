@@ -77,7 +77,8 @@ def mungingData(inputDataRootPath, outputDataRootPath):
     interactions_test_indexed_df = interactions_test_df.set_index("personId")
 
     return interactions_full_indexed_df, interactions_train_indexed_df,\
-        interactions_test_indexed_df, interactions_full_df
+        interactions_test_indexed_df, interactions_full_df, interactions_train_df
+
 
 
 # aggregate number of interactions between personId and contentId
@@ -108,16 +109,18 @@ def getStopWords(tps=['english', 'portuguese']):
 
     return stopwords_list
 
+
 def getVectorizer(tp, stopwords_list):
     if tp == "tfidf":
         vectorizer = TfidfVectorizer(analyzer="word",
-            ngram_range=(1, 2), 
-            min_df=0.003,
-            max_df=0.5,
-            max_features=5000,
-            stop_words=stopwords_list)
-    
+                                     ngram_range=(1, 2),
+                                     min_df=0.003,
+                                     max_df=0.5,
+                                     max_features=5000,
+                                     stop_words=stopwords_list)
+
     return vectorizer
+
 
 def getMatrix(data, vectorizer_type="tfidf"):
     stopwords_list = getStopWords()
@@ -126,3 +129,22 @@ def getMatrix(data, vectorizer_type="tfidf"):
     matrix = vectorizer.fit_transform(data)
 
     return matrix
+
+
+def getPredictionsDfFromSVD(data, number_of_factors):
+    users_items_pivot_matrix_df = data.pivot(index="personId",
+                                             columns="contentId",
+                                             values="eventStrength"
+                                             ).fillna(0)
+    users_items_pivot_matrix = users_items_pivot_matrix_df.values
+    users_ids = list(users_items_pivot_matrix_df.index)
+
+    U, sigma, Vt = svds(users_items_pivot_matrix, k=number_of_factors)
+    sigma = np.diag(sigma)
+    all_users_to_items_predictions_ratings = np.dot(np.dot(U, sigma), Vt)
+
+    cf_preds_df = pd.DataFrame(all_users_to_items_predictions_ratings,
+                               columns=users_items_pivot_matrix_df.columns,
+                               index=users_ids).transpose()
+
+    return cf_preds_df

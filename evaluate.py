@@ -154,8 +154,7 @@ class ModelEvaluator:
             person_metrics["_person_id"] = person_id
             people_metrics.append(person_metrics)
 
-            if idx % 100 == 0:
-                print("%d users processed" % idx)
+        print("%d users processed" % idx)
 
         people_metrics_df = pd.DataFrame(people_metrics).sort_values(
             'interacted_count', ascending=False)
