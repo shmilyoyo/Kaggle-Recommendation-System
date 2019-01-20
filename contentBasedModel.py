@@ -3,9 +3,9 @@ import preprocessData
 from sklearn.metrics.pairwise import cosine_similarity
 import pandas as pd
 
-class ContentBasedModel(BaseModel):
+class CBRecommender(BaseModel):
 
-    MODEL_NAME = "Content-based Model"
+    MODEL_NAME = "Content-based Model Recommender"
 
     def __init__(self, model_id, contents_ids, users_profiles, maxtrix, items_df=None):
         """Initilaize the data used in this classself.

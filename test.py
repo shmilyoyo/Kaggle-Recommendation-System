@@ -3,8 +3,9 @@ import preprocessData
 from popularityModel import PopularityModel
 from evaluate import ModelEvaluator
 from profile import Profile
-from contentBasedModel import ContentBasedModel
+from contentBasedModel import CBRecommender
 from collaborativeFilteringBasedModel import CFRecommender
+from hybridRecommender import HybridRecommender
 
 inputDataRootPath = "/data/haoxu/Data/Kaggle-Recommendation-Dataset"
 outputDataRootPath = "/data/haoxu/Data/Kaggle-Recommendation-Dataset"
@@ -42,7 +43,7 @@ print("Global metrics: \n {}".format(pop_global_metrics))
 with pd.option_context('display.max_rows', None, 'display.max_columns', None):
     print(pop_detailed_results_df.head(10))"""
 
-"""# test Profile Module
+# test Profile Module
 item_ids = articles_df['contentId'].tolist()
 tfidf_matrix = preprocessData.getMatrix(
     articles_df["title"] + "" + articles_df["text"])
@@ -53,19 +54,30 @@ profile = Profile(content_ids, tfidf_matrix, interactions_full_df, articles_df)
 users_profiles = profile.build_users_profiles()
 
 # test Content-based Module
-content_based_model = ContentBasedModel(
+cb_recommender = CBRecommender(
     "content-based", item_ids, users_profiles, tfidf_matrix)
 
 print("Evaluating Content-Based Filtering Model...")
-cb_global_metrics, cb_detailed_results_df = model_evaluator.evaluate_model(content_based_model)
-print("Global Metrics: \n {}".format(cb_global_metrics))"""
+cb_global_metrics, cb_detailed_results_df = model_evaluator.evaluate_model(
+    cb_recommender)
+print("Global Metrics: \n {}".format(cb_global_metrics))
 
 # test Collaborative Filtering based Module
 cf_predictions_df = preprocessData.getPredictionsDfFromSVD(
     interactions_train_df, 15)
-cf_recommender_model = CFRecommender(
+cf_recommender = CFRecommender(
     "Collaborative Filtering Based Model", cf_predictions_df, articles_df)
 
 print("Evaluating Collaborative Filtering (SVD Matrix Factorization) model...")
-cf_global_metrics, cf_detailed_results_df = model_evaluator.evaluate_model(cf_recommender_model)
+cf_global_metrics, cf_detailed_results_df = model_evaluator.evaluate_model(
+    cf_recommender)
 print("Global metrics: \n{}".format(cf_global_metrics))
+
+# test Hybrid Module
+hb_recommender = HybridRecommender(
+    "Hybrid Based Model", cb_recommender, cf_recommender, articles_df)
+
+print('Evaluating Hybrid model...')
+hybrid_global_metrics, hybrid_detailed_results_df = model_evaluator.evaluate_model(
+    hb_recommender)
+print('\nGlobal metrics:\n%s' % hybrid_global_metrics)
