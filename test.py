@@ -6,6 +6,9 @@ from profile import Profile
 from contentBasedModel import CBRecommender
 from collaborativeFilteringBasedModel import CFRecommender
 from hybridRecommender import HybridRecommender
+import matplotlib
+matplotlib.use("agg")
+import matplotlib.pyplot as plt
 
 inputDataRootPath = "/data/haoxu/Data/Kaggle-Recommendation-Dataset"
 outputDataRootPath = "/data/haoxu/Data/Kaggle-Recommendation-Dataset"
@@ -13,7 +16,7 @@ outputDataRootPath = "/data/haoxu/Data/Kaggle-Recommendation-Dataset"
 articles_df = pd.read_csv(inputDataRootPath + "/" + "shared_articles.csv")
 articles_df = articles_df[articles_df['eventType'] == "CONTENT SHARED"]
 
-# test preprocessData Module
+"""# test preprocessData Module
 interactions_full_indexed_df, interactions_train_indexed_df, \
     interactions_test_indexed_df, interactions_full_df, \
     interactions_train_df = preprocessData.mungingData(inputDataRootPath,
@@ -28,7 +31,7 @@ model_evaluator = ModelEvaluator(articles_df, interactions_test_indexed_df,
                                  interactions_test_indexed_df,
                                  )
 
-"""# test PopularityModel Module
+# test PopularityModel Module
 item_popularity_df = preprocessData.getItemPopularityDf(
     interactions_full_indexed_df)
 
@@ -38,10 +41,10 @@ popularity_model = PopularityModel(
 print("Evaluating Popularity Recommendation Model...")
 pop_global_metrics, pop_detailed_results_df = model_evaluator.evaluate_model(
     popularity_model)
-print("Global metrics: \n {}".format(pop_global_metrics))
+print("\nGlobal metrics: \n {}".format(pop_global_metrics))
 
-with pd.option_context('display.max_rows', None, 'display.max_columns', None):
-    print(pop_detailed_results_df.head(10))"""
+# with pd.option_context('display.max_rows', None, 'display.max_columns', None):
+#     print(pop_detailed_results_df.head(10))
 
 # test Profile Module
 item_ids = articles_df['contentId'].tolist()
@@ -60,7 +63,7 @@ cb_recommender = CBRecommender(
 print("Evaluating Content-Based Filtering Model...")
 cb_global_metrics, cb_detailed_results_df = model_evaluator.evaluate_model(
     cb_recommender)
-print("Global Metrics: \n {}".format(cb_global_metrics))
+print("\nGlobal Metrics: \n {}".format(cb_global_metrics))
 
 # test Collaborative Filtering based Module
 cf_predictions_df = preprocessData.getPredictionsDfFromSVD(
@@ -71,7 +74,7 @@ cf_recommender = CFRecommender(
 print("Evaluating Collaborative Filtering (SVD Matrix Factorization) model...")
 cf_global_metrics, cf_detailed_results_df = model_evaluator.evaluate_model(
     cf_recommender)
-print("Global metrics: \n{}".format(cf_global_metrics))
+print("\nGlobal metrics: \n{}".format(cf_global_metrics))
 
 # test Hybrid Module
 hb_recommender = HybridRecommender(
@@ -81,3 +84,19 @@ print('Evaluating Hybrid model...')
 hybrid_global_metrics, hybrid_detailed_results_df = model_evaluator.evaluate_model(
     hb_recommender)
 print('\nGlobal metrics:\n%s' % hybrid_global_metrics)
+
+
+# present the every model results
+total_metrics = [pop_global_metrics, cf_global_metrics,
+                 cb_global_metrics, hybrid_global_metrics]
+global_metrics_df = pd.DataFrame(total_metrics).set_index("modelName")
+global_metrics_df.to_pickle(outputDataRootPath + "/" + "global_metrics_df.pkl")
+"""
+
+global_metrics_df = pd.read_pickle(outputDataRootPath + "/" + "global_metrics_df.pkl")
+ax = global_metrics_df.transpose().plot(kind='bar', figsize=(15, 8))
+for p in ax.patches:
+    ax.annotate("%.3f" % p.get_height(), (p.get_x() + p.get_width() / 2., p.get_height()),
+                ha='center', va='center', xytext=(0, 10), textcoords='offset points')
+fig = ax.get_figure()
+fig.savefig(outputDataRootPath + "/" + "global_metrics_df.pdf")
