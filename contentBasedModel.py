@@ -7,20 +7,20 @@ class CBRecommender(BaseModel):
 
     MODEL_NAME = "Content-based Model Recommender"
 
-    def __init__(self, model_id, contents_ids, users_profiles, maxtrix, items_df=None):
+    def __init__(self, model_id, contents_ids, users_profiles, matrix, items_df=None):
         """Initilaize the data used in this classself.
         
         Arguments:
             model_id {int} - the model id
             contents_ids {DataFrame} -- contents ids in original articles
             users_profiles {dict} -- mapping person_id to profile vector
-            maxtrix {matrix} -- the matrix returned from vectorizer
+            matrix {matrix} -- the matrix returned from vectorizer
             items_df {DataFrame} -- the default additional items added in result (default: {None})
         """
 
         self.contents_ids = contents_ids
         self.users_profiles = users_profiles
-        self.maxtrix = maxtrix
+        self.matrix = matrix
         self.items_df = items_df
 
     def get_model_name(self):
@@ -43,7 +43,7 @@ class CBRecommender(BaseModel):
         """
 
         cosine_similarities = cosine_similarity(
-            self.users_profiles[person_id], self.maxtrix)
+            self.users_profiles[person_id], self.matrix)
         similar_indexes = cosine_similarities.argsort().flatten()[-topn:]
         similar_items = sorted([(self.contents_ids[i], cosine_similarities[0, i])
                                 for i in similar_indexes], key=lambda x: -x[1])
