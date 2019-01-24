@@ -10,11 +10,14 @@ import matplotlib
 matplotlib.use("agg")
 import matplotlib.pyplot as plt
 
+from ldaTopicModel import LdaTopicModel
+
 inputDataRootPath = "/data/haoxu/Data/Kaggle-Recommendation-Dataset"
 outputDataRootPath = "/data/haoxu/Data/Kaggle-Recommendation-Dataset"
 
 articles_df = pd.read_csv(inputDataRootPath + "/" + "shared_articles.csv")
 articles_df = articles_df[articles_df['eventType'] == "CONTENT SHARED"]
+articles_df = articles_df[articles_df.lang == 'en']
 
 """# test preprocessData Module
 interactions_full_indexed_df, interactions_train_indexed_df, \
@@ -93,10 +96,15 @@ global_metrics_df = pd.DataFrame(total_metrics).set_index("modelName")
 global_metrics_df.to_pickle(outputDataRootPath + "/" + "global_metrics_df.pkl")
 """
 
-global_metrics_df = pd.read_pickle(outputDataRootPath + "/" + "global_metrics_df.pkl")
-ax = global_metrics_df.transpose().plot(kind='bar', figsize=(15, 8))
-for p in ax.patches:
-    ax.annotate("%.3f" % p.get_height(), (p.get_x() + p.get_width() / 2., p.get_height()),
-                ha='center', va='center', xytext=(0, 10), textcoords='offset points')
-fig = ax.get_figure()
-fig.savefig(outputDataRootPath + "/" + "global_metrics_df.pdf")
+# global_metrics_df = pd.read_pickle(outputDataRootPath + "/" + "global_metrics_df.pkl")
+# ax = global_metrics_df.transpose().plot(kind='bar', figsize=(15, 8))
+# for p in ax.patches:
+#     ax.annotate("%.3f" % p.get_height(), (p.get_x() + p.get_width() / 2., p.get_height()),
+#                 ha='center', va='center', xytext=(0, 10), textcoords='offset points')
+# fig = ax.get_figure()
+# fig.savefig(outputDataRootPath + "/" + "global_metrics_df.pdf")
+
+corpus = articles_df.text.tolist()
+ldaTm = LdaTopicModel("LDA_Topic_Model")
+ldaTm.preprocess_data(corpus)
+ldaTm.get_best_model(21, 2, 2)

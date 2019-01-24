@@ -3,7 +3,7 @@ import numpy as np
 import sklearn
 
 
-class Profile:
+class RecsProfile:
 
     def __init__(self, content_ids, matrix, interactions_df, articles):
         """Initialize the content ids and data matrix return from vectorizer.

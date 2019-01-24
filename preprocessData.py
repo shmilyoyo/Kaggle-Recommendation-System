@@ -12,7 +12,11 @@ from nltk.corpus import stopwords
 from sklearn.metrics.pairwise import cosine_similarity
 from scipy.sparse.linalg import svds
 from pathlib import Path
-
+from nltk.corpus import stopwords
+import gensim
+import gensim.corpora as corpora
+from gensim.utils import simple_preprocess
+import re
 
 def mungingData(inputDataRootPath, outputDataRootPath):
     inputDataRootPath = Path(inputDataRootPath)
@@ -80,8 +84,16 @@ def mungingData(inputDataRootPath, outputDataRootPath):
         interactions_test_indexed_df, interactions_full_df, interactions_train_df
 
 
+def get_texts_for_user(user_id, articles_df, interactions_df):
+    contentIds = interactions_df.groupby('personId')['contentId'].tolist()
+    texts = articles_df[articles_df['contentId'].isin(
+        contentIds)]['text'].tolist()
+
+    return texts
 
 # aggregate number of interactions between personId and contentId
+
+
 def smooth_user_preference(x):
     return math.log(1 + x, 2)
 
@@ -148,3 +160,55 @@ def getPredictionsDfFromSVD(data, number_of_factors):
                                index=users_ids).transpose()
 
     return cf_preds_df
+
+
+def remove_email(docs):
+    return [re.sub('\S*@\S*\s?', '', doc) for doc in docs]
+
+
+def remove_newline(docs):
+    return [re.sub('\s+', ' ', doc) for doc in docs]
+
+
+def remove_single_quote(docs):
+    return [re.sub("\'", "", doc) for doc in docs]
+
+
+def doc_to_words(docs):
+    for doc in docs:
+        yield(simple_preprocess(str(doc), deacc=True))
+
+
+def build_n_gram(docs_words):
+    bigram = gensim.models.Phrases(docs_words, min_count=5, threshold=100)
+    trigram = gensim.models.Phrases(bigram[docs_words], threshold=100)
+
+    # fast model
+    bigram_mod = gensim.models.phrases.Phraser(bigram)
+    trigram_mod = gensim.models.phrases.Phraser(trigram)
+
+    return bigram_mod, trigram_mod
+
+
+def remove_stopwords(docs_words):
+    stop_words = stopwords.words('english')
+    stop_words.extend(['from', 'subject', 're', 'edu', 'use'])
+    return [[word for word in doc if word not in set(stop_words)] for doc in docs_words]
+
+
+def make_bigrams(model, docs_words):
+    return [model[doc] for doc in docs_words]
+
+
+def make_trigrams(model, docs_words):
+    return [model[doc] for doc in docs_words]
+
+
+def lemmatized(nlp, docs_words, allowed_postags=['NOUN', 'ADJ', 'VERB', 'ADV']):
+    # texts are list of lists of words
+    texts_out = []
+    for doc in docs_words:
+        doc = nlp(" ".join(doc))
+        texts_out.append(
+            [token.lemma_ for token in doc if token.pos_ in allowed_postags])
+    return texts_out
