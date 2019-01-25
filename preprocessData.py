@@ -18,6 +18,7 @@ import gensim.corpora as corpora
 from gensim.utils import simple_preprocess
 import re
 
+
 def mungingData(inputDataRootPath, outputDataRootPath):
     inputDataRootPath = Path(inputDataRootPath)
     outputDataRootPath = Path(outputDataRootPath)
@@ -183,16 +184,19 @@ def build_n_gram(docs_words):
     bigram = gensim.models.Phrases(docs_words, min_count=5, threshold=100)
     trigram = gensim.models.Phrases(bigram[docs_words], threshold=100)
 
-    # fast model
-    bigram_mod = gensim.models.phrases.Phraser(bigram)
-    trigram_mod = gensim.models.phrases.Phraser(trigram)
-
-    return bigram_mod, trigram_mod
+    return bigram, trigram
 
 
 def remove_stopwords(docs_words):
     stop_words = stopwords.words('english')
-    stop_words.extend(['from', 'subject', 're', 'edu', 'use'])
+    stop_words.extend(['from', 'subject', 're', 'edu', 'use', "things",
+                       "that's", "something", "take", "don't", "may",
+                       "want", "you're", "set", "might", "says",
+                       "including", "lot", "much", "said", "know", "good",
+                       "step", "often", "going", "thing", "things", "think",
+                       "back", "actually", "better", "look", "find", "right",
+                       "example", "verb", "verbs"])
+
     return [[word for word in doc if word not in set(stop_words)] for doc in docs_words]
 
 
@@ -204,7 +208,7 @@ def make_trigrams(model, docs_words):
     return [model[doc] for doc in docs_words]
 
 
-def lemmatized(nlp, docs_words, allowed_postags=['NOUN', 'ADJ', 'VERB', 'ADV']):
+def lemmatized(nlp, docs_words, allowed_postags=['NOUN', 'ADJ', 'ADV']):
     # texts are list of lists of words
     texts_out = []
     for doc in docs_words:

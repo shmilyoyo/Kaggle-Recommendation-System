@@ -5,21 +5,27 @@ import re
 import numpy as np
 import pandas as pd
 from pprint import pprint
+import matplotlib.pyplot as plt
 
 # Gensim
 import gensim
 from gensim.models import CoherenceModel
 import gensim.corpora as corpora
 
-import matplotlib.pyplot as plt
 # spacy for lemmatization
 import spacy
 
+from pathlib import Path
+import pickle
+import json
 
 class LdaTopicModel(BaseModel):
 
-    def __init__(self, model_id):
+    def __init__(self, model_id, outputRootPath, model_type='default', model_path=None):
         self.model_id = model_id
+        self.outputRootPath = Path(outputRootPath)
+        self.model_type = model_type
+        self.model_path = model_path
         self.nlp = spacy.load('en', disable=['parser', 'ner'])
         self.id2word = None
         self.corpus = None
@@ -30,51 +36,112 @@ class LdaTopicModel(BaseModel):
         pass
 
     def preprocess_data(self, docs):
-        docs = preprocessData.remove_email(docs)
-        docs = preprocessData.remove_newline(docs)
-        docs = preprocessData.remove_single_quote(docs)
-        docs_words = list(preprocessData.doc_to_words(docs))
+        outputFolderPath = self.outputRootPath / (self.model_type + "_model")
+        # if not outputFolderPath.exists():
+        #     outputFolderPath.mkdir()
 
-        docs_words = preprocessData.remove_stopwords(docs_words)
-        docs_words = preprocessData.lemmatized(
-            self.nlp, docs_words, allowed_postags=['NOUN', 'ADJ', 'VERB', 'ADV'])
-        docs_words = preprocessData.remove_stopwords(docs_words)
+        # docs = preprocessData.remove_email(docs)
+        # docs = preprocessData.remove_newline(docs)
+        # docs = preprocessData.remove_single_quote(docs)
+        # docs_words = list(preprocessData.doc_to_words(docs))
+
+        # docs_words = preprocessData.remove_stopwords(docs_words)
+        # docs_words = preprocessData.lemmatized(
+        #     self.nlp, docs_words, allowed_postags=['NOUN', 'ADJ', 'ADV'])
+        # docs_words = preprocessData.remove_stopwords(docs_words)
+
+        # if (outputFolderPath / "bigram").exists() and (outputFolderPath / "trigram").exists():
+        #     print("load n-gram...")
+        #     bigram = gensim.models.phrases.Phraser.load(str(outputFolderPath / "bigram"))
+        #     trigram = gensim.models.phrases.Phraser.load(str(outputFolderPath / "trigram"))
+        # else:
+        #     bigram, trigram = preprocessData.build_n_gram(docs_words)
+        #     bigram.save(str(outputFolderPath / "bigram"))
+        #     trigram.save(str(outputFolderPath / "trigram"))
+
+        # bigram_model = gensim.models.phrases.Phraser(bigram)
+        # trigram_model = gensim.models.phrases.Phraser(trigram)
+
+        # docs_words_trigram = preprocessData.make_trigrams(
+        #     trigram_model, docs_words)
+
+        if (outputFolderPath / 'dictionary').exists():
+            self.id2word = gensim.corpora.dictionary.Dictionary.load(str(outputFolderPath / 'dictionary'))
+        else:
+            self.id2word = corpora.Dictionary(docs_words_trigram)
+            self.id2word.save(str(outputFolderPath / 'dictionary'))
         
-        bigram_model, trigram_model = preprocessData.build_n_gram(docs_words)
-
-        docs_words_trigram = preprocessData.make_trigrams(
-            trigram_model, docs_words)
-
-        self.id2word = corpora.Dictionary(docs_words_trigram)
-        self.corpus = docs_words_trigram
-        self.corpus_bow = [self.id2word.doc2bow(doc) for doc in self.corpus]
+        if (outputFolderPath / 'corpus.pkl').exists():
+            with (outputFolderPath / 'corpus.pkl').open("rb") as fp:
+                self.corpus = pickle.load(fp)
+        else:
+            self.corpus = docs_words_trigram
+            with (outputFolderPath / 'corpus.pkl').open("wb") as fp:
+                pickle.dump(self.corpus, fp)
+        
+        if (outputFolderPath / 'corpus_bow.pkl').exists():
+            with (outputFolderPath / 'corpus_bow.pkl').open("rb") as fp:
+                self.corpus_bow = pickle.load(fp)
+        else:
+            self.corpus_bow = [self.id2word.doc2bow(doc) for doc in self.corpus]
+            with (outputFolderPath / 'corpus_bow.pkl').open("wb") as fp:
+                pickle.dump(self.corpus_bow, fp)
 
     def compute_coherence_values(self, limit, start=2, step=2):
+        outputFolderPath = self.outputRootPath / (self.model_type + "_model")
+
         coherence_values = []
         model_list = []
         for num_topics in range(start, limit, step):
-            print(num_topics)
-            model = gensim.models.ldamodel.LdaModel(
-                corpus=self.corpus_bow, id2word=self.id2word, num_topics=num_topics)
+            if self.model_type == "mallet":
+                model = gensim.models.wrappers.LdaMallet(
+                    self.model_path, corpus=self.corpus_bow,
+                    id2word=self.id2word, num_topics=num_topics)
+            else:
+                model = gensim.models.ldamodel.LdaModel(
+                    corpus=self.corpus_bow,
+                    id2word=self.id2word, num_topics=num_topics
+                )
             model_list.append(model)
             coherencemodel = CoherenceModel(
                 model=model, texts=self.corpus, dictionary=self.id2word,
                 coherence="c_v")
             coherence_values.append(coherencemodel.get_coherence())
+            print(coherence_values)
 
-        self.get_topic_num_to_coherence_plot(coherence_values, limit, start, step)
+        self.get_topic_num_to_coherence_plot(
+            coherence_values, limit, start, step)
 
+        with (outputFolderPath / "coherence_values.json").open("w") as fp:
+            json.dump(coherence_values, fp, indent=4)
         return model_list, coherence_values
 
     def get_topic_num_to_coherence_plot(self, coherence_values, limit, start=2, step=2):
+        outputFolderPath = self.outputRootPath / (self.model_type + "_model")
+        if not outputFolderPath.exists():
+            outputFolderPath.mkdir()
+        outputFilePath = outputFolderPath / "topic_num_to_coherence_plot.png" 
+
         x = range(start, limit, step)
         plt.plot(x, coherence_values)
         plt.xlabel("Num Topics")
         plt.ylabel("Coherence score")
         plt.legend(("coherence_values"), loc='best')
-        plt.savefig('./topic_num_to_coherence_plot.png')
+        plt.savefig(str(outputFilePath))
 
     def get_best_model(self, limit, start, step):
+        outputFolderPath = self.outputRootPath / (self.model_type + "_model")
+        outputFilePath = outputFolderPath / "optimal_model"        
+
+        if outputFilePath.exists():
+            print("model existed in {}".format(str(outputFilePath)))
+            if self.model_type == "mallet":
+                return gensim.models.wrappers.ldamallet.LdaMallet.load(str(outputFilePath))
+            if self.model_type == "default":
+                return gensim.models.ldamodel.LdaModel.load(str(outputFilePath))
+        if not outputFolderPath.exists():
+            outputFolderPath.mkdir()
+
         model_list, coherence_values = self.compute_coherence_values(
             limit, start, step)
 
@@ -86,9 +153,8 @@ class LdaTopicModel(BaseModel):
                 max_coherence = coherence_value
                 best_topics_num = start + index * step
                 self.optimal_model = model
-        
-        self.optimal_model.to_pickle("./optimal_model.pkl")
-        
+
+        self.optimal_model.save(str(outputFolderPath / "optimal_model"))
         print("The max coherence of the best model: ", max_coherence)
         print("The number of topics of the best model: ", best_topics_num)
 
@@ -135,11 +201,11 @@ class LdaTopicModel(BaseModel):
                                                             ).to_dict()['eventStrength']
 
         return topic_id_to_average_strength
-    
+
     def get_whole_words_distributions_for_topics(self, topic_ids):
         topic_id_to_whole_words_distributions = {}
         whole_words_distributions = self.optimal_model.get_topics()
         for topic_id in topic_ids:
             topic_id_to_whole_words_distributions[topic_id] = whole_words_distributions[topic_ids]
-        
+
         return topic_id_to_whole_words_distributions

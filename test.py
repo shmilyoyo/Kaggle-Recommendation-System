@@ -10,6 +10,8 @@ import matplotlib
 matplotlib.use("agg")
 import matplotlib.pyplot as plt
 
+import pickle
+import json
 from ldaTopicModel import LdaTopicModel
 
 inputDataRootPath = "/data/haoxu/Data/Kaggle-Recommendation-Dataset"
@@ -105,6 +107,23 @@ global_metrics_df.to_pickle(outputDataRootPath + "/" + "global_metrics_df.pkl")
 # fig.savefig(outputDataRootPath + "/" + "global_metrics_df.pdf")
 
 corpus = articles_df.text.tolist()
-ldaTm = LdaTopicModel("LDA_Topic_Model")
+model_path = "/data/haoxu/Library/mallet-2.0.8/bin/mallet"
+ldaTm = LdaTopicModel("LDA_Topic_Model", outputDataRootPath, model_type="mallet", model_path=model_path)
+print("Preprocessing Data...")
 ldaTm.preprocess_data(corpus)
-ldaTm.get_best_model(21, 2, 2)
+print("Training Data...")
+ldaTm.get_best_model(17, 4, 2)
+# model_list = []
+# coherence_list = []
+
+# for i in range(20, 21, 5):
+#     print("{} number of topics".format(i))
+#     model, coherence = ldaTm.get_best_model(i+1, i, 1)
+#     model_list.append(model)
+#     coherence_list.append(coherence)
+
+# with open(outputDataRootPath + "/mallet_model/model_list.pkl", "wb") as fp:
+#     pickle.dump(model_list, fp)
+
+# with open(outputDataRootPath + "/mallet_model/coherence_list.json", "w") as fp:
+#     json.dump(coherence_list, fp)
