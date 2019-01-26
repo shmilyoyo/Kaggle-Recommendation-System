@@ -14,8 +14,8 @@ import pickle
 import json
 from ldaTopicModel import LdaTopicModel
 
-inputDataRootPath = "/data/haoxu/Data/Kaggle-Recommendation-Dataset"
-outputDataRootPath = "/data/haoxu/Data/Kaggle-Recommendation-Dataset"
+inputDataRootPath = "/home/xuhao/Data/Kaggle-Recommendation-Dataset"
+outputDataRootPath = "/home/xuhao/Data/Kaggle-Recommendation-Dataset"
 
 articles_df = pd.read_csv(inputDataRootPath + "/" + "shared_articles.csv")
 articles_df = articles_df[articles_df['eventType'] == "CONTENT SHARED"]
@@ -107,12 +107,12 @@ global_metrics_df.to_pickle(outputDataRootPath + "/" + "global_metrics_df.pkl")
 # fig.savefig(outputDataRootPath + "/" + "global_metrics_df.pdf")
 
 corpus = articles_df.text.tolist()
-model_path = "/data/haoxu/Library/mallet-2.0.8/bin/mallet"
+model_path = "/home/xuhao/Library/mallet-2.0.8/bin/mallet"
 ldaTm = LdaTopicModel("LDA_Topic_Model", outputDataRootPath, model_type="mallet", model_path=model_path)
 print("Preprocessing Data...")
 ldaTm.preprocess_data(corpus)
 print("Training Data...")
-ldaTm.get_best_model(17, 4, 2)
+ldaTm.get_best_model(24, 2, 2)
 # model_list = []
 # coherence_list = []
 
