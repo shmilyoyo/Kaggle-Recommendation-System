@@ -1,7 +1,7 @@
-from BaseModel import BaseModel
+from base_model import BaseModel
 
 
-class CFRecommender(BaseModel):
+class CollaborativeFilteringBasedModel(BaseModel):
 
     MODEL_NAME = "Collaborative Filtering based Model"
 

@@ -1,7 +1,7 @@
-from BaseModel import BaseModel
+from base_model import BaseModel
 
 
-class HybridRecommender(BaseModel):
+class HybridModel(BaseModel):
 
     MODEL_NAME = "Collaborative Filtering based Model"
 

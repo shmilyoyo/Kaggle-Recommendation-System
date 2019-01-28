@@ -1,5 +1,3 @@
-# DATA MUNGING
-
 import numpy as np
 import scipy
 import pandas as pd
@@ -164,11 +162,11 @@ def getPredictionsDfFromSVD(data, number_of_factors):
 
 
 def remove_email(docs):
-    return [re.sub('\S*@\S*\s?', '', doc) for doc in docs]
+    return [re.sub(r'\S*@\S*\s?', '', doc) for doc in docs]
 
 
 def remove_newline(docs):
-    return [re.sub('\s+', ' ', doc) for doc in docs]
+    return [re.sub(r'\s+', ' ', doc) for doc in docs]
 
 
 def remove_single_quote(docs):

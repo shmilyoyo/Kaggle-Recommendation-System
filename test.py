@@ -1,11 +1,11 @@
 import pandas as pd
-import preprocessData
-from popularityModel import PopularityModel
-from evaluate import ModelEvaluator
+import preprocess_data
+from popularity_model import PopularityModel
+from model_evaluator import ModelEvaluator
 from profile import Profile
-from contentBasedModel import CBRecommender
-from collaborativeFilteringBasedModel import CFRecommender
-from hybridRecommender import HybridRecommender
+from content_based_model import ContentBasedModel
+from collaborative_filtering_based_model import CollaborativeFilteringBasedModel
+from hybrid_model import HybridModel
 import matplotlib
 matplotlib.use("agg")
 import matplotlib.pyplot as plt
@@ -14,8 +14,9 @@ import pickle
 import json
 
 from pathlib import Path
+import random
 
-from ldaTopicModel import LdaTopicModel
+from lda_topic_model import LdaTopicModel
 
 inputDataRootPath = "/home/xuhao/Data/Kaggle-Recommendation-Dataset"
 outputDataRootPath = "/home/xuhao/Data/Kaggle-Recommendation-Dataset"
@@ -26,14 +27,14 @@ articles_df = articles_df[articles_df['lang'] == 'en']
 articles_df = articles_df.reset_index()
 print(len(articles_df))
 
-# test preprocessData Module
+# test preprocess_data Module
 interactions_full_indexed_df, interactions_train_indexed_df, \
     interactions_test_indexed_df, interactions_full_df, \
-    interactions_train_df = preprocessData.mungingData(inputDataRootPath,
+    interactions_train_df = preprocess_data.mungingData(inputDataRootPath,
                                                        outputDataRootPath)
 """
 # person_id = -8845298781299428018
-# print(preprocessData.get_items_interacted(person_id, interactions_full_indexed_df))
+# print(preprocess_data.get_items_interacted(person_id, interactions_full_indexed_df))
 
 # model evaluator
 model_evaluator = ModelEvaluator(articles_df, interactions_test_indexed_df,
@@ -42,7 +43,7 @@ model_evaluator = ModelEvaluator(articles_df, interactions_test_indexed_df,
                                  )
 
 # test PopularityModel Module
-item_popularity_df = preprocessData.getItemPopularityDf(
+item_popularity_df = preprocess_data.getItemPopularityDf(
     interactions_full_indexed_df)
 
 popularity_model = PopularityModel(
@@ -58,7 +59,7 @@ print("\nGlobal metrics: \n {}".format(pop_global_metrics))
 
 # test Profile Module
 item_ids = articles_df['contentId'].tolist()
-tfidf_matrix = preprocessData.getMatrix(
+tfidf_matrix = preprocess_data.getMatrix(
     articles_df["title"] + "" + articles_df["text"])
 
 content_ids = articles_df['contentId'].tolist()
@@ -67,7 +68,7 @@ profile = Profile(content_ids, tfidf_matrix, interactions_full_df, articles_df)
 users_profiles = profile.build_users_profiles()
 
 # test Content-based Module
-cb_recommender = CBRecommender(
+cb_recommender = ContentBasedModel(
     "content-based", item_ids, users_profiles, tfidf_matrix)
 
 print("Evaluating Content-Based Filtering Model...")
@@ -76,9 +77,9 @@ cb_global_metrics, cb_detailed_results_df = model_evaluator.evaluate_model(
 print("\nGlobal Metrics: \n {}".format(cb_global_metrics))
 
 # test Collaborative Filtering based Module
-cf_predictions_df = preprocessData.getPredictionsDfFromSVD(
+cf_predictions_df = preprocess_data.getPredictionsDfFromSVD(
     interactions_train_df, 15)
-cf_recommender = CFRecommender(
+cf_recommender = CollaborativeFilteringBasedModel(
     "Collaborative Filtering Based Model", cf_predictions_df, articles_df)
 
 print("Evaluating Collaborative Filtering (SVD Matrix Factorization) model...")
@@ -87,7 +88,7 @@ cf_global_metrics, cf_detailed_results_df = model_evaluator.evaluate_model(
 print("\nGlobal metrics: \n{}".format(cf_global_metrics))
 
 # test Hybrid Module
-hb_recommender = HybridRecommender(
+hb_recommender = HybridModel(
     "Hybrid Based Model", cb_recommender, cf_recommender, articles_df)
 
 print('Evaluating Hybrid model...')
@@ -112,22 +113,20 @@ global_metrics_df.to_pickle(outputDataRootPath + "/" + "global_metrics_df.pkl")
 # fig.savefig(outputDataRootPath + "/" + "global_metrics_df.pdf")
 
 corpus = articles_df.text.tolist()
+ids_to_contents = pd.Series(
+    articles_df['text'].values, index=articles_df['contentId']).to_dict()
+
 model_path = "/home/xuhao/Library/mallet-2.0.8/bin/mallet"
 ldaTm = LdaTopicModel("LDA_Topic_Model", outputDataRootPath,
                       model_type="mallet", model_path=model_path)
-print("Preprocessing Data...")
-ldaTm.preprocess_data(corpus)
-print("Training Data...")
-ldaTm.get_best_model(24, 2, 2)
+ldaTm.train_model(corpus, 24, 2, 2)
 
-topics_docs_full_df_for_user = ldaTm.get_topics_docs_full_df_for_user(
-    user_id, articles_df, interactions_full_df)
+user_id = 3609194402293569455
 
-# print(set(articles_df[articles_df['contentId'].isin(topics_docs_full_df['Documnet_Id'])]['lang']))
-# print(set(topics_docs_full_df['Documnet_Id']) == set(articles_df['contentId']))
+# test generate profile function
+# ldaTm.generate_profile(user_id, articles_df, interactions_full_df)
 
-topics_to_cnt = ldaTm.get_topics_to_cnt(topics_docs_full_df_for_user)
-print(topics_to_cnt)
-
-topics_to_strength = ldaTm.get_topics_to_strength
-print(topics_to_strength)
+new_docs = random.sample(list(ids_to_contents.items()), 10)
+# ldaTm.get_score_of_new_docs(user_id, new_docs)
+recommend_df = ldaTm.recommend_items(user_id, new_docs, articles_df, verbose=True)
+print(recommend_df)

@@ -1,9 +1,8 @@
-from BaseModel import BaseModel
-import preprocessData
+from base_model import BaseModel
 from sklearn.metrics.pairwise import cosine_similarity
 import pandas as pd
 
-class CBRecommender(BaseModel):
+class ContentBasedModel(BaseModel):
 
     MODEL_NAME = "Content-based Model Recommender"
 
