@@ -165,8 +165,20 @@ class LdaTopicModel(BaseModel):
         print("The max coherence of the best model: ", max_coherence)
         print("The number of topics of the best model: ", best_topics_num)
 
-    def get_topics_docs_full_df(self, corpus_bow, docIds, user_contents_strength_df):
-        topics_docs_full_df = pd.DataFrame()
+    def get_topics_docs_full_df_for_user(self, user_id, articles_df, interactions_full_df):
+        contentIds = interactions_full_df[interactions_full_df['personId']
+                                          == user_id]['contentId'].tolist()
+        corpus_indexes = []
+        for contentId in contentIds:
+            index = articles_df[articles_df['contentId']
+                                == contentId].index.tolist()
+            corpus_indexes += index
+        corpus = [self.corpus[corpus_index] for corpus_index in corpus_indexes]
+        corpus_bow = [self.corpus_bow[corpus_index]
+                      for corpus_index in corpus_indexes]
+        user_contents_strength_df = interactions_full_df[interactions_full_df['personId'] == user_id]
+
+        topics_docs_full_df_for_user = pd.DataFrame()
 
         # find one dominant topic for each document
         for row in self.optimal_model[corpus_bow]:
@@ -178,31 +190,34 @@ class LdaTopicModel(BaseModel):
                         topic_id)
                     topic_keywords = ", ".join(
                         [word for word, prop in word_distribution])
-                    topics_docs_full_df = topics_docs_full_df.append(pd.Series(
+                    topics_docs_full_df_for_user = topics_docs_full_df_for_user.append(pd.Series(
                         [int(topic_id), round(prop_topic, 4), topic_keywords]),
                         ignore_index=True)
                 else:
                     break
-        topics_docs_full_df.columns = [
+        topics_docs_full_df_for_user.columns = [
             'Dominant_Topic', 'Perc_Contribution', 'Topic_Keywords']
 
         # Append the original text to the data frame
-        contents = pd.Series(self.corpus)
-        docIds = pd.Series(docIds)
-        topics_docs_full_df = pd.concat(
-            [topics_docs_full_df, docIds, contents], axis=1)
-        topics_docs_full_df = topics_docs_full_df.reset_index()
-        topics_docs_full_df.columns = [
+        contents = pd.Series(corpus)
+        contentIds = pd.Series(contentIds)
+        topics_docs_full_df_for_user = pd.concat(
+            [topics_docs_full_df_for_user, contentIds, contents], axis=1)
+        topics_docs_full_df_for_user = topics_docs_full_df_for_user.reset_index()
+        topics_docs_full_df_for_user.columns = [
             'Document_No', 'Dominant_Topic', 'Topic_Perc_Contrib', 'Keywords',
-            'Document_Id', 'Text']
+            'contentId', 'Text']
 
-        # topics_docs_full_df = topics_docs_full_df.merge(
-        #     user_contents_strength_df, how="left", left_on="Document_Id",
-        #     right_on="contentId")
+        topics_docs_full_df_for_user = topics_docs_full_df_for_user.merge(
+            user_contents_strength_df[[
+                "contentId", "eventStrength"]], how="left",
+            left_on="contentId", right_on="contentId")
+        topics_docs_full_df_for_user.columns = [
+            'Document_No', 'Dominant_Topic', 'Topic_Perc_Contrib', 'Keywords',
+            'Content_Id', 'Text', "Strength"]
+        return topics_docs_full_df_for_user
 
-        return topics_docs_full_df
-
-    # def get_topic_id_to_average_strength(self, topics_docs_full_df):
+    # def get_topics_to_strength_for_doc_ids(self, topics_docs_full_df, doc_ids):
     #     topic_id_to_average_strength = topics_docs_full_df.groupby('Dominant_Topic')[
     #         'eventStrength'].mean().reset_index().set_index('Dominant_Topic'
     #                                                         ).to_dict()['eventStrength']
@@ -216,11 +231,20 @@ class LdaTopicModel(BaseModel):
 
     #     return topic_id_to_whole_words_distributions
 
-    def get_topics_to_cnt_for_doc_ids(self, topics_docs_full_df, doc_ids):
-        topics_docs_df = topics_docs_full_df[topics_docs_full_df['Document_Id'].isin(
-            doc_ids)]
-        topics_to_cnt = topics_docs_df['Dominant_Topic'].value_counts().to_dict()
+    def get_topics_to_cnt(self, topics_docs_full_df_for_user):
+        topics_to_cnt = topics_docs_full_df_for_user['Dominant_Topic'].value_counts(
+        ).to_dict()
 
-        topics_to_cnt = dict([(int(key), value) for key, value in topics_to_cnt.items()])
-        
+        topics_to_cnt = dict([(int(key), value)
+                              for key, value in topics_to_cnt.items()])
+
         return topics_to_cnt
+
+    def get_topics_to_strength(self, topics_docs_full_df_for_user):
+        topics_to_strength = topics_docs_full_df_for_user.groupby(
+            ['Dominant_Topic'])['eventStrength'].sum().to_dict()
+
+        topics_to_strength = dict([(int(key), value)
+                                   for key, value in topics_to_strength.items()])
+
+        return topics_to_strength

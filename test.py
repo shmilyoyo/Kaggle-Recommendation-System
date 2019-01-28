@@ -23,6 +23,7 @@ outputDataRootPath = "/home/xuhao/Data/Kaggle-Recommendation-Dataset"
 articles_df = pd.read_csv(inputDataRootPath + "/" + "shared_articles.csv")
 articles_df = articles_df[articles_df['eventType'] == "CONTENT SHARED"]
 articles_df = articles_df[articles_df['lang'] == 'en']
+articles_df = articles_df.reset_index()
 print(len(articles_df))
 
 # test preprocessData Module
@@ -119,16 +120,14 @@ ldaTm.preprocess_data(corpus)
 print("Training Data...")
 ldaTm.get_best_model(24, 2, 2)
 
-with (Path(outputDataRootPath) / 'mallet_model/corpus_bow.pkl').open("rb") as fp:
-    corpus_bow = pickle.load(fp)
-
-docs_ids = articles_df["contentId"].tolist()
-
-topics_docs_full_df = ldaTm.get_topics_docs_full_df(
-    corpus_bow, docs_ids, interactions_full_df)
+topics_docs_full_df_for_user = ldaTm.get_topics_docs_full_df_for_user(
+    user_id, articles_df, interactions_full_df)
 
 # print(set(articles_df[articles_df['contentId'].isin(topics_docs_full_df['Documnet_Id'])]['lang']))
 # print(set(topics_docs_full_df['Documnet_Id']) == set(articles_df['contentId']))
 
-topics_to_cnt = ldaTm.get_topics_to_cnt_for_doc_ids(topics_docs_full_df, docs_ids)
+topics_to_cnt = ldaTm.get_topics_to_cnt(topics_docs_full_df_for_user)
 print(topics_to_cnt)
+
+topics_to_strength = ldaTm.get_topics_to_strength
+print(topics_to_strength)
