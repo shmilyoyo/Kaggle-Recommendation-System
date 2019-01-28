@@ -12,6 +12,9 @@ import matplotlib.pyplot as plt
 
 import pickle
 import json
+
+from pathlib import Path
+
 from ldaTopicModel import LdaTopicModel
 
 inputDataRootPath = "/home/xuhao/Data/Kaggle-Recommendation-Dataset"
@@ -19,14 +22,15 @@ outputDataRootPath = "/home/xuhao/Data/Kaggle-Recommendation-Dataset"
 
 articles_df = pd.read_csv(inputDataRootPath + "/" + "shared_articles.csv")
 articles_df = articles_df[articles_df['eventType'] == "CONTENT SHARED"]
-articles_df = articles_df[articles_df.lang == 'en']
+articles_df = articles_df[articles_df['lang'] == 'en']
+print(len(articles_df))
 
-"""# test preprocessData Module
+# test preprocessData Module
 interactions_full_indexed_df, interactions_train_indexed_df, \
     interactions_test_indexed_df, interactions_full_df, \
     interactions_train_df = preprocessData.mungingData(inputDataRootPath,
                                                        outputDataRootPath)
-
+"""
 # person_id = -8845298781299428018
 # print(preprocessData.get_items_interacted(person_id, interactions_full_indexed_df))
 
@@ -108,22 +112,23 @@ global_metrics_df.to_pickle(outputDataRootPath + "/" + "global_metrics_df.pkl")
 
 corpus = articles_df.text.tolist()
 model_path = "/home/xuhao/Library/mallet-2.0.8/bin/mallet"
-ldaTm = LdaTopicModel("LDA_Topic_Model", outputDataRootPath, model_type="mallet", model_path=model_path)
+ldaTm = LdaTopicModel("LDA_Topic_Model", outputDataRootPath,
+                      model_type="mallet", model_path=model_path)
 print("Preprocessing Data...")
 ldaTm.preprocess_data(corpus)
 print("Training Data...")
 ldaTm.get_best_model(24, 2, 2)
-# model_list = []
-# coherence_list = []
 
-# for i in range(20, 21, 5):
-#     print("{} number of topics".format(i))
-#     model, coherence = ldaTm.get_best_model(i+1, i, 1)
-#     model_list.append(model)
-#     coherence_list.append(coherence)
+with (Path(outputDataRootPath) / 'mallet_model/corpus_bow.pkl').open("rb") as fp:
+    corpus_bow = pickle.load(fp)
 
-# with open(outputDataRootPath + "/mallet_model/model_list.pkl", "wb") as fp:
-#     pickle.dump(model_list, fp)
+docs_ids = articles_df["contentId"].tolist()
 
-# with open(outputDataRootPath + "/mallet_model/coherence_list.json", "w") as fp:
-#     json.dump(coherence_list, fp)
+topics_docs_full_df = ldaTm.get_topics_docs_full_df(
+    corpus_bow, docs_ids, interactions_full_df)
+
+# print(set(articles_df[articles_df['contentId'].isin(topics_docs_full_df['Documnet_Id'])]['lang']))
+# print(set(topics_docs_full_df['Documnet_Id']) == set(articles_df['contentId']))
+
+topics_to_cnt = ldaTm.get_topics_to_cnt_for_doc_ids(topics_docs_full_df, docs_ids)
+print(topics_to_cnt)

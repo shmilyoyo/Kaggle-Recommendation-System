@@ -19,6 +19,7 @@ from pathlib import Path
 import pickle
 import json
 
+
 class LdaTopicModel(BaseModel):
 
     def __init__(self, model_id, outputRootPath, model_type='default', model_path=None):
@@ -66,11 +67,12 @@ class LdaTopicModel(BaseModel):
         #     trigram_model, docs_words)
 
         if (outputFolderPath / 'dictionary').exists():
-            self.id2word = gensim.corpora.dictionary.Dictionary.load(str(outputFolderPath / 'dictionary'))
+            self.id2word = gensim.corpora.dictionary.Dictionary.load(
+                str(outputFolderPath / 'dictionary'))
         else:
             self.id2word = corpora.Dictionary(docs_words_trigram)
             self.id2word.save(str(outputFolderPath / 'dictionary'))
-        
+
         if (outputFolderPath / 'corpus.pkl').exists():
             with (outputFolderPath / 'corpus.pkl').open("rb") as fp:
                 self.corpus = pickle.load(fp)
@@ -78,12 +80,13 @@ class LdaTopicModel(BaseModel):
             self.corpus = docs_words_trigram
             with (outputFolderPath / 'corpus.pkl').open("wb") as fp:
                 pickle.dump(self.corpus, fp)
-        
+
         if (outputFolderPath / 'corpus_bow.pkl').exists():
             with (outputFolderPath / 'corpus_bow.pkl').open("rb") as fp:
                 self.corpus_bow = pickle.load(fp)
         else:
-            self.corpus_bow = [self.id2word.doc2bow(doc) for doc in self.corpus]
+            self.corpus_bow = [self.id2word.doc2bow(
+                doc) for doc in self.corpus]
             with (outputFolderPath / 'corpus_bow.pkl').open("wb") as fp:
                 pickle.dump(self.corpus_bow, fp)
 
@@ -120,7 +123,7 @@ class LdaTopicModel(BaseModel):
         outputFolderPath = self.outputRootPath / (self.model_type + "_model")
         if not outputFolderPath.exists():
             outputFolderPath.mkdir()
-        outputFilePath = outputFolderPath / "topic_num_to_coherence_plot.png" 
+        outputFilePath = outputFolderPath / "topic_num_to_coherence_plot.png"
 
         x = range(start, limit, step)
         plt.plot(x, coherence_values)
@@ -131,14 +134,18 @@ class LdaTopicModel(BaseModel):
 
     def get_best_model(self, limit, start, step):
         outputFolderPath = self.outputRootPath / (self.model_type + "_model")
-        outputFilePath = outputFolderPath / "optimal_model"        
+        outputFilePath = outputFolderPath / "optimal_model"
 
         if outputFilePath.exists():
             print("model existed in {}".format(str(outputFilePath)))
             if self.model_type == "mallet":
-                return gensim.models.wrappers.ldamallet.LdaMallet.load(str(outputFilePath))
+                self.optimal_model = gensim.models.wrappers.ldamallet.LdaMallet.load(
+                    str(outputFilePath))
+                return
             if self.model_type == "default":
-                return gensim.models.ldamodel.LdaModel.load(str(outputFilePath))
+                self.optimal_model = gensim.models.ldamodel.LdaModel.load(
+                    str(outputFilePath))
+                return
         if not outputFolderPath.exists():
             outputFolderPath.mkdir()
 
@@ -158,7 +165,7 @@ class LdaTopicModel(BaseModel):
         print("The max coherence of the best model: ", max_coherence)
         print("The number of topics of the best model: ", best_topics_num)
 
-    def get_topics_docs_full_df(self, corpus_bow, docIds, contents_strength_df):
+    def get_topics_docs_full_df(self, corpus_bow, docIds, user_contents_strength_df):
         topics_docs_full_df = pd.DataFrame()
 
         # find one dominant topic for each document
@@ -187,25 +194,33 @@ class LdaTopicModel(BaseModel):
         topics_docs_full_df = topics_docs_full_df.reset_index()
         topics_docs_full_df.columns = [
             'Document_No', 'Dominant_Topic', 'Topic_Perc_Contrib', 'Keywords',
-            'Documnet_Id', 'Text']
+            'Document_Id', 'Text']
 
-        topics_docs_full_df = topics_docs_full_df.merge(
-            contents_strength_df, how="left", left_on="Documnet_Id",
-            right_on="contentId")
+        # topics_docs_full_df = topics_docs_full_df.merge(
+        #     user_contents_strength_df, how="left", left_on="Document_Id",
+        #     right_on="contentId")
 
         return topics_docs_full_df
 
-    def get_topic_id_to_average_strength(self, topics_docs_full_df):
-        topic_id_to_average_strength = topics_docs_full_df.groupby('Dominant_Topic')[
-            'eventStrength'].mean().reset_index().set_index('Dominant_Topic'
-                                                            ).to_dict()['eventStrength']
+    # def get_topic_id_to_average_strength(self, topics_docs_full_df):
+    #     topic_id_to_average_strength = topics_docs_full_df.groupby('Dominant_Topic')[
+    #         'eventStrength'].mean().reset_index().set_index('Dominant_Topic'
+    #                                                         ).to_dict()['eventStrength']
+    #     topic_id_to_average_strength = dict(
+    #         [(int(key), value) for key, value in topic_id_to_average_strength.items()])
+    #     return topic_id_to_average_strength
 
-        return topic_id_to_average_strength
+    # def get_whole_words_distributions_for_topics(self):
+    #     topic_id_to_whole_words_distributions = dict(
+    #         enumerate(self.optimal_model.get_topics()))
 
-    def get_whole_words_distributions_for_topics(self, topic_ids):
-        topic_id_to_whole_words_distributions = {}
-        whole_words_distributions = self.optimal_model.get_topics()
-        for topic_id in topic_ids:
-            topic_id_to_whole_words_distributions[topic_id] = whole_words_distributions[topic_ids]
+    #     return topic_id_to_whole_words_distributions
 
-        return topic_id_to_whole_words_distributions
+    def get_topics_to_cnt_for_doc_ids(self, topics_docs_full_df, doc_ids):
+        topics_docs_df = topics_docs_full_df[topics_docs_full_df['Document_Id'].isin(
+            doc_ids)]
+        topics_to_cnt = topics_docs_df['Dominant_Topic'].value_counts().to_dict()
+
+        topics_to_cnt = dict([(int(key), value) for key, value in topics_to_cnt.items()])
+        
+        return topics_to_cnt
