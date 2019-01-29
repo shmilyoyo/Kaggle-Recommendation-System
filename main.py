@@ -3,7 +3,7 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 from scipy.sparse.linalg import svds
 import matplotlib.pyplot as plt
-import preprocess_data
+import utility
 
 
 inputDataRootPath = "/data/haoxu/Data/Kaggle-Recommendation-Dataset"

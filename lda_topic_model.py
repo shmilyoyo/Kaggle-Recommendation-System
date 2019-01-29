@@ -1,5 +1,5 @@
 from base_model import BaseModel
-import preprocess_data
+import utility
 
 import re
 import numpy as np
@@ -54,8 +54,8 @@ class LdaTopicModel(BaseModel):
     def runModel(self):
         pass
 
-    def _preprocess_data(self, docs):
-        """Preprocess Data by using methods in preprocess_data module.
+    def _utility(self, docs):
+        """Preprocess Data by using methods in utility module.
 
         Arguments:
             docs {list} -- a list of raw docs texts.
@@ -64,15 +64,15 @@ class LdaTopicModel(BaseModel):
             list -- a list of processed docs in list of tokens form.
         """
 
-        docs = preprocess_data.remove_email(docs)
-        docs = preprocess_data.remove_newline(docs)
-        docs = preprocess_data.remove_single_quote(docs)
-        docs_words = list(preprocess_data.doc_to_words(docs))
+        docs = utility.remove_email(docs)
+        docs = utility.remove_newline(docs)
+        docs = utility.remove_single_quote(docs)
+        docs_words = list(utility.doc_to_words(docs))
 
-        docs_words = preprocess_data.remove_stopwords(docs_words)
-        docs_words = preprocess_data.lemmatized(
+        docs_words = utility.remove_stopwords(docs_words)
+        docs_words = utility.lemmatized(
             self.nlp, docs_words, allowed_postags=['NOUN', 'ADJ', 'ADV'])
-        docs_words = preprocess_data.remove_stopwords(docs_words)
+        docs_words = utility.remove_stopwords(docs_words)
 
         return docs_words
 
@@ -87,7 +87,7 @@ class LdaTopicModel(BaseModel):
         if not outputFolderPath.exists():
             outputFolderPath.mkdir()
 
-        # docs_words = self._preprocess_data(docs)
+        # docs_words = self._utility(docs)
 
         if (outputFolderPath / "bigram").exists() and (outputFolderPath / "trigram").exists():
             print("load n-gram...")
@@ -96,14 +96,14 @@ class LdaTopicModel(BaseModel):
             trigram = gensim.models.phrases.Phraser.load(
                 str(outputFolderPath / "trigram"))
         else:
-            bigram, trigram = preprocess_data.build_n_gram(docs_words)
+            bigram, trigram = utility.build_n_gram(docs_words)
             bigram.save(str(outputFolderPath / "bigram"))
             trigram.save(str(outputFolderPath / "trigram"))
 
         self.bigram_model = gensim.models.phrases.Phraser(bigram)
         self.trigram_model = gensim.models.phrases.Phraser(trigram)
 
-        # docs_words_trigram = preprocess_data.make_trigrams(
+        # docs_words_trigram = utility.make_trigrams(
         #     self.trigram_model, docs_words)
 
         if (outputFolderPath / 'dictionary').exists():
@@ -431,8 +431,8 @@ class LdaTopicModel(BaseModel):
             user_id)
         topics = set(list(user_profile_cnt_norm))
 
-        docs_words = self._preprocess_data(docs)
-        corpus = preprocess_data.make_trigrams(self.trigram_model, docs_words)
+        docs_words = self._utility(docs)
+        corpus = utility.make_trigrams(self.trigram_model, docs_words)
         corpus_bow = [self.id2word.doc2bow(doc) for doc in corpus]
 
         doc_id_to_cnt_weight_score = {}

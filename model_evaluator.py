@@ -1,7 +1,7 @@
 # EVALUATION
 EVAL_RANDOM_SAMPLE_NON_INTERACTED_ITEMS = 100
 
-import preprocess_data
+import utility
 import random
 import pandas as pd
 
@@ -41,7 +41,7 @@ class ModelEvaluator:
             set -- irrelevant items samples
         """
 
-        interacted_items = preprocess_data.get_items_interacted(
+        interacted_items = utility.get_items_interacted(
             person_id, self.interactions_full_indexed_df)
         all_items = set(self.articles_df["contentId"])
         non_interacted_items = all_items - interacted_items
@@ -96,7 +96,7 @@ class ModelEvaluator:
 
         # get a ranked recommendation list form a model for a given user
         person_recs_df = model.recommend_items(person_id,
-                                               items_to_ignore=preprocess_data.get_items_interacted(
+                                               items_to_ignore=utility.get_items_interacted(
                                                    person_id,
                                                    self.interactions_train_indexed_df),
                                                topn=10000000000)

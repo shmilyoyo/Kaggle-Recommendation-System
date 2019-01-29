@@ -1,5 +1,5 @@
 import pandas as pd
-import preprocess_data
+import utility
 from popularity_model import PopularityModel
 from model_evaluator import ModelEvaluator
 from profile import Profile
@@ -27,14 +27,14 @@ articles_df = articles_df[articles_df['lang'] == 'en']
 articles_df = articles_df.reset_index()
 print(len(articles_df))
 
-# test preprocess_data Module
+# test utility Module
 interactions_full_indexed_df, interactions_train_indexed_df, \
     interactions_test_indexed_df, interactions_full_df, \
-    interactions_train_df = preprocess_data.mungingData(inputDataRootPath,
+    interactions_train_df = utility.mungingData(inputDataRootPath,
                                                        outputDataRootPath)
 """
 # person_id = -8845298781299428018
-# print(preprocess_data.get_items_interacted(person_id, interactions_full_indexed_df))
+# print(utility.get_items_interacted(person_id, interactions_full_indexed_df))
 
 # model evaluator
 model_evaluator = ModelEvaluator(articles_df, interactions_test_indexed_df,
@@ -43,7 +43,7 @@ model_evaluator = ModelEvaluator(articles_df, interactions_test_indexed_df,
                                  )
 
 # test PopularityModel Module
-item_popularity_df = preprocess_data.getItemPopularityDf(
+item_popularity_df = utility.getItemPopularityDf(
     interactions_full_indexed_df)
 
 popularity_model = PopularityModel(
@@ -59,7 +59,7 @@ print("\nGlobal metrics: \n {}".format(pop_global_metrics))
 
 # test Profile Module
 item_ids = articles_df['contentId'].tolist()
-tfidf_matrix = preprocess_data.getMatrix(
+tfidf_matrix = utility.getMatrix(
     articles_df["title"] + "" + articles_df["text"])
 
 content_ids = articles_df['contentId'].tolist()
@@ -77,7 +77,7 @@ cb_global_metrics, cb_detailed_results_df = model_evaluator.evaluate_model(
 print("\nGlobal Metrics: \n {}".format(cb_global_metrics))
 
 # test Collaborative Filtering based Module
-cf_predictions_df = preprocess_data.getPredictionsDfFromSVD(
+cf_predictions_df = utility.getPredictionsDfFromSVD(
     interactions_train_df, 15)
 cf_recommender = CollaborativeFilteringBasedModel(
     "Collaborative Filtering Based Model", cf_predictions_df, articles_df)
@@ -136,8 +136,9 @@ new_docs = random.sample(list(ids_to_contents.items()), 10)
 tfidf_model = TfidfBasedModel(
     "content-based", outputDataRootPath)
 tfidf_model.train_model(corpus)
-tfidf_model.get_user_profile(user_id, articles_df, interactions_full_df)
+tfidf_model.get_user_profile(user_id, interactions_full_df, articles_df)
 docs_to_scores = tfidf_model.get_score_of_docs(user_id, new_docs)
 print(docs_to_scores)
 recommend_df = tfidf_model.recommend_items(user_id, new_docs, articles_df, verbose=True)
 print(recommend_df)
+# print(tfidf_model.model.get_feature_names())
