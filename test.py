@@ -3,7 +3,7 @@ import preprocess_data
 from popularity_model import PopularityModel
 from model_evaluator import ModelEvaluator
 from profile import Profile
-from content_based_model import ContentBasedModel
+from tfidf_based_model import TfidfBasedModel
 from collaborative_filtering_based_model import CollaborativeFilteringBasedModel
 from hybrid_model import HybridModel
 import matplotlib
@@ -116,17 +116,28 @@ corpus = articles_df.text.tolist()
 ids_to_contents = pd.Series(
     articles_df['text'].values, index=articles_df['contentId']).to_dict()
 
-model_path = "/home/xuhao/Library/mallet-2.0.8/bin/mallet"
-ldaTm = LdaTopicModel("LDA_Topic_Model", outputDataRootPath,
-                      model_type="mallet", model_path=model_path)
-ldaTm.train_model(corpus, 24, 2, 2)
+# model_path = "/home/xuhao/Library/mallet-2.0.8/bin/mallet"
+# ldaTm = LdaTopicModel("LDA_Topic_Model", outputDataRootPath,
+#                       model_type="mallet", model_path=model_path)
+# ldaTm.train_model(corpus, 24, 2, 2)
 
 user_id = 3609194402293569455
 
-# test generate profile function
-# ldaTm.generate_profile(user_id, articles_df, interactions_full_df)
+# # test generate profile function
+# # ldaTm.generate_profile(user_id, articles_df, interactions_full_df)
 
 new_docs = random.sample(list(ids_to_contents.items()), 10)
 # ldaTm.get_score_of_new_docs(user_id, new_docs)
-recommend_df = ldaTm.recommend_items(user_id, new_docs, articles_df, verbose=True)
+# recommend_df = ldaTm.recommend_items(user_id, new_docs, articles_df, verbose=True)
+# print(recommend_df)
+
+
+# test tidif_based_model
+tfidf_model = TfidfBasedModel(
+    "content-based", outputDataRootPath)
+tfidf_model.train_model(corpus)
+tfidf_model.get_user_profile(user_id, articles_df, interactions_full_df)
+docs_to_scores = tfidf_model.get_score_of_docs(user_id, new_docs)
+print(docs_to_scores)
+recommend_df = tfidf_model.recommend_items(user_id, new_docs, articles_df, verbose=True)
 print(recommend_df)
