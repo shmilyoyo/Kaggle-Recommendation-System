@@ -246,7 +246,7 @@ class LdaTopicModel(BaseModel):
         print("The max coherence of the best model: ", max_coherence)
         print("The number of topics of the best model: ", best_topics_num)
 
-    def _get_topics_docs_full_df_for_user(self, user_id, articles_df,
+    def get_items_profiles(self, user_id, articles_df,
                                           interactions_full_df):
         """Get dataframe with whole information involving topics and docs.
 
@@ -285,7 +285,7 @@ class LdaTopicModel(BaseModel):
         user_contents_strength_df = interactions_full_df[
             interactions_full_df['personId'] == user_id]
 
-        topics_docs_full_df_for_user = pd.DataFrame()
+        items_profiles = pd.DataFrame()
 
         # find one dominant topic for each document
         for row in self.optimal_model[corpus_bow]:
@@ -297,48 +297,48 @@ class LdaTopicModel(BaseModel):
                         topic_id)
                     topic_keywords = ", ".join(
                         [word for word, prop in word_distribution])
-                    topics_docs_full_df_for_user = topics_docs_full_df_for_user.append(pd.Series(
+                    items_profiles = items_profiles.append(pd.Series(
                         [int(topic_id), round(prop_topic, 4), topic_keywords]),
                         ignore_index=True)
                 else:
                     break
-        topics_docs_full_df_for_user.columns = [
+        items_profiles.columns = [
             'Dominant_Topic', 'Perc_Contribution', 'Topic_Keywords']
 
         # Append the original text to the data frame
         contents = pd.Series(corpus)
         contentIds = pd.Series(contentIds)
-        topics_docs_full_df_for_user = pd.concat(
-            [topics_docs_full_df_for_user, contentIds, contents], axis=1)
-        topics_docs_full_df_for_user = topics_docs_full_df_for_user.reset_index()
-        topics_docs_full_df_for_user.columns = [
+        items_profiles = pd.concat(
+            [items_profiles, contentIds, contents], axis=1)
+        items_profiles = items_profiles.reset_index()
+        items_profiles.columns = [
             'Document_No', 'Dominant_Topic', 'Topic_Perc_Contrib', 'Keywords',
             'contentId', 'Text']
 
-        topics_docs_full_df_for_user = topics_docs_full_df_for_user.merge(
+        items_profiles = items_profiles.merge(
             user_contents_strength_df[[
                 "contentId", "eventStrength"]], how="left",
             left_on="contentId", right_on="contentId")
-        topics_docs_full_df_for_user.columns = [
+        items_profiles.columns = [
             'Document_No', 'Dominant_Topic', 'Topic_Perc_Contrib', 'Keywords',
             'Content_Id', 'Text', "Strength"]
         
         outputFilePath = outputFolderPath / str(user_id) + ".pkl"
-        topics_docs_full_df_for_user.to_pickle(str(outputFilePath))
+        items_profiles.to_pickle(str(outputFilePath))
 
-        return topics_docs_full_df_for_user
+        return items_profiles
 
-    def _get_topics_to_cnt_norm(self, topics_docs_full_df_for_user):
+    def _get_topics_to_cnt_norm(self, items_profiles):
         """Get weight based on the number of docs related to each topic.
         
         Arguments:
-            topics_docs_full_df_for_user {pandas.DataFrame} -- the dataframe with information.
+            items_profiles {pandas.DataFrame} -- the dataframe with information.
         
         Returns:
             dict -- topic_id -> number of related docs.
         """
 
-        topics_to_cnt = topics_docs_full_df_for_user['Dominant_Topic'].value_counts(
+        topics_to_cnt = items_profiles['Dominant_Topic'].value_counts(
             normalize=True).to_dict()
 
         topics_to_cnt = dict([(int(key), value)
@@ -346,17 +346,17 @@ class LdaTopicModel(BaseModel):
 
         return topics_to_cnt
 
-    def _get_topics_to_strength_norm(self, topics_docs_full_df_for_user):
+    def _get_topics_to_strength_norm(self, items_profiles):
         """Get weight based on the strength of docs related to each topic.
         
         Arguments:
-            topics_docs_full_df_for_user {pandas.DataFrame} -- the dataframe with information.
+            items_profiles {pandas.DataFrame} -- the dataframe with information.
         
         Returns:
             dict -- topic_id -> strength
         """
 
-        topics_to_strength = topics_docs_full_df_for_user.groupby(
+        topics_to_strength = items_profiles.groupby(
             ['Dominant_Topic'])['Strength'].sum().to_dict()
 
         total = sum(topics_to_strength.values())
@@ -365,7 +365,7 @@ class LdaTopicModel(BaseModel):
 
         return topics_to_strength
 
-    def generate_profile(self, user_id, articles_df, interactions_full_df):
+    def get_user_profile(self, user_id, articles_df, interactions_full_df):
         """Generate profile for user_id.
         
         Arguments:
@@ -379,20 +379,20 @@ class LdaTopicModel(BaseModel):
         if not outputFolderPath.exists():
             outputFolderPath.mkdir()
 
-        topics_docs_full_df_for_user = self._get_topics_docs_full_df_for_user(
+        items_profiles = self.get_items_profiles(
             user_id, articles_df, interactions_full_df)
 
         topics_to_cnt_norm = self._get_topics_to_cnt_norm(
-            topics_docs_full_df_for_user)
+            items_profiles)
         with (outputFolderPath / (str(user_id) + "_cnt_norm.pkl")).open("wb") as fp:
             pickle.dump(topics_to_cnt_norm, fp)
 
         topics_to_strength_norm = self._get_topics_to_strength_norm(
-            topics_docs_full_df_for_user)
+            items_profiles)
         with (outputFolderPath / (str(user_id) + "_strength_norm.pkl")).open("wb") as fp:
             pickle.dump(topics_to_strength_norm, fp)
 
-    def _load_profile(self, user_id):
+    def load_user_profile(self, user_id):
         """Load the profile for user_id.
         
         Arguments:
@@ -412,21 +412,22 @@ class LdaTopicModel(BaseModel):
 
         return topics_to_cnt_norm, topics_to_strength_norm
 
-    def get_score_of_new_docs(self, user_id, new_docs):
+    def get_score_of_docs(self, user_id, docs):
         """Get the socore for new incoming docs based on profile.
         
         Arguments:
             user_id {int} -- the user id.
-            new_docs {list} -- a list of new incoming raw docs texts.
+            docs {list} -- a list of new incoming raw docs texts,
+                           [[id, content], ...].
         
         Returns:
             tuple -- (doc_id -> score weighted by number of docs,
                       doc_id -> score weighted by strength)
         """
 
-        doc_ids, docs = zip(*new_docs)
+        doc_ids, docs = zip(*docs)
 
-        user_profile_cnt_norm, user_profile_strength_norm = self._load_profile(
+        user_profile_cnt_norm, user_profile_strength_norm = self.load_user_profile(
             user_id)
         topics = set(list(user_profile_cnt_norm))
 
@@ -449,13 +450,13 @@ class LdaTopicModel(BaseModel):
 
         return doc_id_to_cnt_weight_score, doc_id_to_strength_weight_score
 
-    def recommend_items(self, user_id, new_docs, articles_df, items_to_ignore=[],
+    def recommend_items(self, user_id, docs, articles_df, items_to_ignore=[],
                         topn=10, verbose=False):
         """Recommend new incoming items to user_id.
         
         Arguments:
             user_id {int} -- the user id.
-            new_docs {list} -- a list of new incoming raw text.
+            docs {list} -- a list of new incoming raw text.
             articles_df {pandas.DataFrame} -- the articles dataframe to get additional information.
         
         Keyword Arguments:
@@ -471,8 +472,8 @@ class LdaTopicModel(BaseModel):
         """
 
         doc_id_to_cnt_weight_score, \
-            doc_id_to_strength_weight_score = self.get_score_of_new_docs(
-                user_id, new_docs)
+            doc_id_to_strength_weight_score = self.get_score_of_docs(
+                user_id, docs)
 
         doc_id_to_cnt_weight_score = sorted(
             doc_id_to_cnt_weight_score.items(), key=lambda x: x[1], reverse=True)
