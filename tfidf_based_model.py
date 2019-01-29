@@ -4,7 +4,7 @@ from sklearn.metrics.pairwise import cosine_similarity
 import pandas as pd
 import spacy
 import scipy
-import preprocess_data
+import utility
 from sklearn.feature_extraction.text import TfidfVectorizer
 import numpy as np
 import sklearn
@@ -20,17 +20,18 @@ class TfidfBasedModel(ContentedBasedModel):
         """Initilaize the data used in this classself.
 
         Arguments:
-            model_id {int} - the model id
-            contents_ids {DataFrame} -- contents ids in original articles
-            users_profiles {dict} -- mapping person_id to profile vector
-            matrix {matrix} -- the matrix returned from vectorizer
-            items_df {DataFrame} -- the default additional items added in result (default: {None})
+            model_id {int} - the model id.
+            contents_ids {DataFrame} -- contents ids in original articles.
+            users_profiles {dict} -- mapping person_id to profile vector.
+            matrix {matrix} -- the matrix returned from vectorizer.
+            items_df {DataFrame} -- the default additional items added in result (default: {None}).
         """
 
         self.model_id = model_id
         self.outputRootPath = Path(outputRootPath)
         self.nlp = spacy.load('en', disable=['parser', 'ner'])
         self.model_type = "tfidf"
+        self.model = None
 
     def get_model_name(self):
         return self.MODEL_NAME
@@ -38,41 +39,69 @@ class TfidfBasedModel(ContentedBasedModel):
     def runModel(self):
         pass
 
-    def generate_profile(self, user_id, articles_df, interactions_full_df):
-        pass
+    def _preprocess_data(self, docs):
+        """Self defined analyzer for TfidfVectorizer.
+        
+        Arguments:
+            docs {list} -- a list of doc text.
+        
+        Returns:
+            list -- a list of lists of doc text with word tokens.
+        """
 
-    def _analyzer(self, docs):
-        docs = preprocess_data.remove_email(docs)
-        docs = preprocess_data.remove_newline(docs)
-        docs = preprocess_data.remove_single_quote(docs)
-        docs_words = list(preprocess_data.doc_to_words(docs))
+        docs = utility.remove_email(docs)
+        docs = utility.remove_newline(docs)
+        docs = utility.remove_single_quote(docs)
+        docs_words = list(utility.doc_to_words(docs))
 
-        docs_words = preprocess_data.remove_stopwords(docs_words)
-        docs_words = preprocess_data.lemmatized(
+        docs_words = utility.remove_stopwords(docs_words)
+        docs_words = utility.lemmatized(
             self.nlp, docs_words, allowed_postags=['NOUN', 'ADJ', 'ADV'])
-        docs_words = preprocess_data.remove_stopwords(docs_words)
+        docs_words = utility.remove_stopwords(docs_words)
 
-        return docs_words
+        docs = [" ".join(doc_word) for doc_word in docs_words]
+        return docs
 
     def train_model(self, docs):
+        """Train the model.
+        
+        Arguments:
+            docs {list} -- a list of doc text.
+        """
+
         outputFolderPath = self.outputRootPath / \
             (self.model_type + "_model")
 
+        if (outputFolderPath / "model.pkl").exists():
+            with (outputFolderPath / "model.pkl").open("rb") as fp:
+                self.model = pickle.load(fp)
+                print("model loaded from {}".format(str(outputFolderPath / "model.pkl")))
+            return
         if not outputFolderPath.exists():
             outputFolderPath.mkdir()
 
-        vectorizer = TfidfVectorizer(self._analyzer,
+        docs = self._preprocess_data(docs)
+        vectorizer = TfidfVectorizer(analyzer='word',
                                      ngram_range=(1, 2),
                                      min_df=0.003,
                                      max_df=0.5,
                                      max_features=5000)
 
         self.model = vectorizer.fit(docs)
-        # with (outputFolderPath / "model.pkl").open("wb") as fp:
-        #     pickle.dump(vectorizer, fp)
+        with (outputFolderPath / "model.pkl").open("wb") as fp:
+            pickle.dump(self.model, fp)
         # self.model = model
 
     def _get_embedding(self, doc):
+        """Get embedding representation for doc text.
+        
+        Arguments:
+            doc {str} -- the doc text.
+        
+        Returns:
+            matrix -- the embedding of the doc text.
+        """
+
         embedding = self.model.transform([doc])
 
         return embedding
@@ -81,10 +110,10 @@ class TfidfBasedModel(ContentedBasedModel):
         """Get the vector corresponding to doc in matrix.
 
         Arguments:
-            doc {int} -- the item id in matrix
+            doc {str} -- the doc text.
 
         Returns:
-            np.array -- the vector in the matrix
+            np.array -- the vector in the matrix.
         """
 
         item_profile = self._get_embedding(doc)
@@ -95,51 +124,47 @@ class TfidfBasedModel(ContentedBasedModel):
         """Get a list of vectors corresponding to docs in matrix.
 
         Arguments:
-            docs {list} -- a list of ids need to be got from matrix
+            docs {list} -- a list of doc text.
 
         Returns:
-            sparse matrix -- the total vectors corresponding to docs
+            sparse matrix -- the total vectors corresponding to docs.
         """
 
-        items_ids, items_contents = zip(*docs)
+        items_contents = self._preprocess_data(docs)
 
         items_profiles_list = [self._get_item_profile(
             item_content) for item_content in items_contents]
         items_profiles = scipy.sparse.vstack(items_profiles_list)
 
-        return items_ids, items_profiles
+        return items_profiles
 
-    def get_user_profile(self, user_id, articles_df, interactions_full_df):
+    def get_user_profile(self, user_id, interactions_full_df, articles_df):
         """Build a user profile based on the normalization.
 
-        normalize the items profiles for person with user_id based on the content strength
+        normalize the items profiles for person with user_id based on the content strength.
 
         Arguments:
-            user_id {int} -- the person index
-            interactions_indexed_df {DataFrame} -- interactions DataFrame indexed on personId
+            user_id {int} -- the person index.
+            interactions_full_df {DataFrame} -- interactions DataFrame.
+            articles_df {DataFrame} -- articles DataFrame.
 
         Returns:
-            matrix -- a user normalized profile
+            matrix -- a user normalized profile.
         """
         outputFolderPath = self.outputRootPath / \
             (self.model_type + "_model") / "profiles"
         if not outputFolderPath.exists():
             outputFolderPath.mkdir()
 
-        interactions_person_df = interactions_full_df[interactions_full_df['personId'] == user_id]
+        items_ids, items_contents = utility.get_items(
+            user_id, interactions_full_df, articles_df)
 
-        contentIds = interactions_person_df['contentId'].tolist()
-        items_df = articles_df[articles_df['contentId'].isin(contentIds)]
-        items_dict = pd.Series(
-            items_df['text'].values, index=items_df['contentId']).to_dict()
-
-        items_ids, items_profiles = self.get_items_profiles(items_dict.items())
+        items_profiles = self.get_items_profiles(items_contents)
 
         # average weight the matrix
-        user_items_strengths = []
-        for item_id in items_ids:
-            user_items_strengths += interactions_person_df[interactions_person_df['contentId']
-                                                           == item_id]['eventStrength'].tolist()
+        user_items_strengths = utility.get_weight(
+            user_id, interactions_full_df, items_ids)
+
         user_items_strengths = np.array(user_items_strengths).reshape(-1, 1)
 
         user_items_strengths_weighted_avg = np.sum(items_profiles.multiply(
@@ -158,8 +183,7 @@ class TfidfBasedModel(ContentedBasedModel):
             user_id {int} -- the user id.
 
         Returns:
-            tuple -- (topic_id -> number of related docs,
-                      dict -- topic_id -> strength)
+            matrix -- the user_id profile.
         """
 
         outputFolderPath = self.outputRootPath / \
@@ -173,17 +197,16 @@ class TfidfBasedModel(ContentedBasedModel):
         """Get similar items to the user profile based on cosine similarityself.
 
         Arguments:
-            person_id {int} -- the person id
-
-        Keyword Arguments:
-            topn {int} -- the number of most similar items (default: {1000})
+            user_id {int} -- the user id.
+            docs {list} -- a list of docs with ids: [(id, content), ...].
 
         Returns:
-            list -- a ranked list of most similar items to the user profile
+            list -- a list of doc id to score: [(id, score)].
         """
         user_profile_strength_norm = self.load_user_profile(user_id)
 
-        items_ids, items_profiles = self.get_items_profiles(docs)
+        items_ids, items_content = zip(*docs)
+        items_profiles = self.get_items_profiles(items_content)
 
         cosine_similarities = cosine_similarity(
             user_profile_strength_norm, items_profiles)
@@ -198,21 +221,22 @@ class TfidfBasedModel(ContentedBasedModel):
         """Recommend items to person with person_idself.
 
         Arguments:
-            person_id {int} -- person id
-
+            person_id {int} -- person id.
+            docs {list} -- a list of docs with ids: [(id, content), ...].
         Keyword Arguments:
-            items_to_ignore {list} -- a list of items that user has already visited (default: {[]})
-            topn {int} -- the number of final recommendation (default: {10})
-            verbose {bool} -- indicate whether add items extra information (default: {False})
+            items_to_ignore {list} -- a list of items that user has already visited (default: {[]}).
+            topn {int} -- the number of final recommendation (default: {10}).
+            verbose {bool} -- indicate whether add items extra information (default: {False}).
 
         Raises:
-            Exception -- if want to use verbose mode, the items_df should be provided
+            Exception -- if want to use verbose mode, the items_df should be provided.
 
         Returns:
-            DataFrame -- a recommendation dataframe
+            DataFrame -- a recommendation dataframe.
         """
 
-        item_id_to_strength_weight_score = self.get_score_of_docs(person_id, docs)
+        item_id_to_strength_weight_score = self.get_score_of_docs(
+            person_id, docs)
         # filter out the items that are already interacted
         item_id_to_strength_weight_score.sort(key=lambda x: x[1], reverse=True)
         similar_items_filter = list(
