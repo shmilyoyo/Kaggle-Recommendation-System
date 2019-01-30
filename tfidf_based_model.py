@@ -188,6 +188,7 @@ class TfidfBasedModel(ContentedBasedModel):
 
         outputFolderPath = self.outputRootPath / \
             (self.model_type + "_model") / "profiles"
+            
         with (outputFolderPath / (str(user_id) + "_strength_norm.pkl")).open("rb") as fp:
             user_profile_strength_norm = pickle.load(fp)
 
