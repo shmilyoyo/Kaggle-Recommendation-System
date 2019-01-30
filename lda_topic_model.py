@@ -14,24 +14,25 @@ from gensim.models import CoherenceModel
 
 
 class LdaTopicModel(ContentedBasedModel):
-    """Recommendation model based on LDA topic model.
+    """
+    Recommendation model based on LDA topic model.
 
     Arguments:
-        BaseModel {abstract class} -- the base abstract class.
+        ContentedBasedModel {class} -- the base class.
     """
 
-    def __init__(self, model_id, outputRootPath, model_path=None):
-        """Initialize the parameters.
+    def __init__(self, model_id, output_root_path, model_path=None):
+        """
+        Initialize the parameters.
 
         Arguments:
             model_id {str} -- the model id.
-            outputRootPath {str} -- the data output root path.
+            output_root_path {str} -- the data output root path.
 
         Keyword Arguments:
-            model_id {str} -- two topic model types: 'default', 'mallet' (default: {'default'}).
             model_path {str} -- the path to 'mallet' model (default: {None}).
         """
-        super().__init__(model_id, outputRootPath)
+        super().__init__(model_id, output_root_path)
         self.model_path = model_path
         self.id2word = None
         self.corpus = None
@@ -40,16 +41,24 @@ class LdaTopicModel(ContentedBasedModel):
         self.trigram_model = None
 
     def get_model_name(self):
+        """
+        Get the model name.
+        
+        Returns:
+            str -- the model id.
+        """
+
         return self.model_id
 
     def _prepare_data_for_training(self, docs):
-        """Generate the prerequisite data for training topic model.
+        """
+        Generate the prerequisite data for training topic model.
 
         Arguments:
             docs {list} -- a list of processed docs in lists of tokens form.
         """
 
-        outputFolderPath = self.outputRootPath / (self.model_id + "_model")
+        outputFolderPath = self.output_root_path / (self.model_id + "_model")
         if not outputFolderPath.exists():
             outputFolderPath.mkdir()
 
@@ -78,7 +87,8 @@ class LdaTopicModel(ContentedBasedModel):
             pickle.dump(self.corpus_bow, fp)
 
     def _compute_coherence_values(self, limit, start=2, step=2):
-        """Compute the coherence values for topic model with different topic number.
+        """
+        Compute the coherence values for topic model with different topic number.
 
         Arguments:
             limit {int} -- the upper bound of the topic number.
@@ -91,7 +101,7 @@ class LdaTopicModel(ContentedBasedModel):
             tuple -- (a list of models, a list of coherences)
         """
 
-        outputFolderPath = self.outputRootPath / (self.model_id + "_model")
+        outputFolderPath = self.output_root_path / (self.model_id + "_model")
 
         coherence_values = []
         model_list = []
@@ -110,7 +120,6 @@ class LdaTopicModel(ContentedBasedModel):
                 model=model, texts=self.corpus, dictionary=self.id2word,
                 coherence="c_v")
             coherence_values.append(coherencemodel.get_coherence())
-            # print(coherence_values)
 
         self._plot_topic_num_to_coherence(
             coherence_values, limit, start, step)
@@ -121,7 +130,8 @@ class LdaTopicModel(ContentedBasedModel):
 
     def _plot_topic_num_to_coherence(self, coherence_values, limit, start=2,
                                      step=2):
-        """Plot the relationship between topic number and corresponding coherence.
+        """
+        Plot the relationship between topic number and corresponding coherence.
 
         Arguments:
             coherence_values {list} -- a list of coherence
@@ -132,7 +142,7 @@ class LdaTopicModel(ContentedBasedModel):
             step {int} -- gap between two test topic number (default: {2}).
         """
 
-        outputFolderPath = self.outputRootPath / (self.model_id + "_model")
+        outputFolderPath = self.output_root_path / (self.model_id + "_model")
         if not outputFolderPath.exists():
             outputFolderPath.mkdir()
         outputFilePath = outputFolderPath / "topic_num_to_coherence_plot.png"
@@ -145,7 +155,8 @@ class LdaTopicModel(ContentedBasedModel):
         plt.savefig(str(outputFilePath))
 
     def train_model(self, docs, limit, start, step):
-        """Train models and get one with highest coherence.
+        """
+        Train models and get one with highest coherence.
 
         Arguments:
             docs {list} -- a list of raw docs texts.
@@ -154,7 +165,7 @@ class LdaTopicModel(ContentedBasedModel):
             step {int} -- gap between two test topic number.
         """
 
-        outputFolderPath = self.outputRootPath / (self.model_id + "_model")
+        outputFolderPath = self.output_root_path / (self.model_id + "_model")
 
         print("Preparing data for training...")
         self._prepare_data_for_training(docs)
@@ -184,7 +195,18 @@ class LdaTopicModel(ContentedBasedModel):
         print("The number of topics of the best model: ", best_topics_num)
 
     def load_model(self):
-        outputFolderPath = self.outputRootPath / (self.model_id + "_model")
+        """
+        Load the model.
+        
+        Raises:
+            FileNotFoundError -- raise error when model is not in path.
+            FileNotFoundError -- raise error when n-gram is not in the path.
+            FileNotFoundError -- raise error when dictionary is not in the path.
+            FileNotFoundError -- raise error when corpus is not in the path.
+            FileNotFoundError -- raise error when corpus_bow is not in the path.
+        """
+
+        outputFolderPath = self.output_root_path / (self.model_id + "_model")
 
         if (outputFolderPath / "optimal_model").exists():
             print("loaded model from {}".format(str(outputFolderPath / "optimal_model")))
@@ -234,11 +256,31 @@ class LdaTopicModel(ContentedBasedModel):
             raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), str(outputFolderPath / 'corpus_bow.pkl'))
 
     def get_embedding(self, doc):
+        """
+        Get embedding representation for doc text.
+        
+        Arguments:
+            doc {str} -- the doc text.
+        
+        Returns:
+            matrix -- the embedding of the doc text.
+        """
+
         embedding = self.optimal_model[doc]
-        # print(embedding)
+
         return embedding
 
     def get_items_profiles(self, docs):
+        """
+        Get a list of vectors corresponding to docs in matrix.
+
+        Arguments:
+            docs {list} -- a list of doc text.
+
+        Returns:
+            sparse matrix -- the total vectors corresponding to docs.
+        """
+
         items_contents_words = self.preprocess_data(docs)
         corpus_list = utility.make_trigrams(self.trigram_model, items_contents_words)
         corpus_bow_list = [self.id2word.doc2bow(corpus) for corpus in corpus_list]
@@ -249,6 +291,17 @@ class LdaTopicModel(ContentedBasedModel):
         return items_profiles
 
     def load_items_profiles(self, items_ids, articles_df):
+        """
+        Load items profiles based on items ids.
+        
+        Arguments:
+            items_ids {list} -- a list of items ids.
+            articles_df {pandas.DataFrame} -- the articles dataframe.
+        
+        Returns:
+            sparse matrix -- the items profiles sparse matrix.
+        """
+
         items_profiles_list = super().load_items_profiles(items_ids, articles_df)
         items_profiles = utility.transform_tuple_to_sparse_matrix(items_profiles_list)
 

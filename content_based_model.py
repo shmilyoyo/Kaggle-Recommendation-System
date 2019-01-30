@@ -16,9 +16,17 @@ from base_model import BaseModel
 
 class ContentedBasedModel(BaseModel):
 
-    def __init__(self, model_id, outputRootPath):
+    def __init__(self, model_id, output_root_path):
+        """
+        Initialize the  parameters.
+        
+        Arguments:
+            model_id {str} -- the model id.
+            output_root_path {str} -- the output root path.
+        """
+
         self.model_id = model_id
-        self.outputRootPath = Path(outputRootPath)
+        self.output_root_path = Path(output_root_path)
         self.nlp = spacy.load('en', disable=['parser', 'ner'])
         self.model = None
 
@@ -26,7 +34,8 @@ class ContentedBasedModel(BaseModel):
         pass
     
     def preprocess_data(self, docs):
-        """Self defined analyzer for TfidfVectorizer.
+        """
+        Self defined analyzer for TfidfVectorizer.
         
         Arguments:
             docs {list} -- a list of doc text.
@@ -50,18 +59,40 @@ class ContentedBasedModel(BaseModel):
 
     @abstractmethod
     def train_model(self, docs):
+        """
+        Train the model.
+        
+        Arguments:
+            docs {list} -- a list of doc text.
+        """
         pass
 
     @abstractmethod    
     def load_model(self):
+        """
+        Load the model.
+        
+        Raises:
+            FileNotFoundError -- raise the error when model is not in path.
+        """
         pass
 
     @abstractmethod
     def get_embedding(self, doc):
+        """
+        Get embedding representation for doc text.
+        
+        Arguments:
+            doc {str} -- the doc text.
+        
+        Returns:
+            matrix -- the embedding of the doc text.
+        """
         pass
     
     def get_item_profile(self, doc):
-        """Get the vector corresponding to doc in matrix.
+        """
+        Get the vector corresponding to doc in matrix.
 
         Arguments:
             doc {str} -- the doc text.
@@ -75,7 +106,18 @@ class ContentedBasedModel(BaseModel):
         return item_profile
 
     def load_items_profiles(self, items_ids, articles_df):
-        outputFolderPath = self.outputRootPath / (self.model_id + "_model")
+        """
+        Load items profiles based on items ids.
+        
+        Arguments:
+            items_ids {list} -- a list of items ids.
+            articles_df {pandas.DataFrame} -- the articles dataframe.
+        
+        Returns:
+            list -- a list of profiles items.
+        """
+
+        outputFolderPath = self.output_root_path / (self.model_id + "_model")
 
         if (outputFolderPath / "items_profiles.pkl").exists():
             with (outputFolderPath / "items_profiles.pkl").open("rb") as fp:
@@ -95,7 +137,8 @@ class ContentedBasedModel(BaseModel):
         return items_profiles_list
 
     def get_user_profile(self, user_id, interactions_full_df, articles_df):
-        """Build a user profile based on the normalization.
+        """
+        Build a user profile based on the normalization.
 
         normalize the items profiles for person with user_id based on the content strength.
 
@@ -107,7 +150,7 @@ class ContentedBasedModel(BaseModel):
         Returns:
             matrix -- a user normalized profile.
         """
-        outputFolderPath = self.outputRootPath / \
+        outputFolderPath = self.output_root_path / \
             (self.model_id + "_model") / "profiles"
         if not outputFolderPath.exists():
             outputFolderPath.mkdir()
@@ -135,7 +178,8 @@ class ContentedBasedModel(BaseModel):
         return user_profile_strength_norm
     
     def load_user_profile(self, user_id):
-        """Load the profile for user_id.
+        """
+        Load the profile for user_id.
 
         Arguments:
             user_id {int} -- the user id.
@@ -144,7 +188,7 @@ class ContentedBasedModel(BaseModel):
             matrix -- the user_id profile.
         """
 
-        outputFolderPath = self.outputRootPath / \
+        outputFolderPath = self.output_root_path / \
             (self.model_id + "_model") / "profiles"
             
         with (outputFolderPath / (str(user_id) + "_strength_norm.pkl")).open("rb") as fp:
@@ -156,10 +200,20 @@ class ContentedBasedModel(BaseModel):
         pass
 
     def get_items_profiles(self, docs):
+        """
+        Get a list of vectors corresponding to docs in matrix.
+
+        Arguments:
+            docs {list} -- a list of doc text.
+
+        Returns:
+            sparse matrix -- the total vectors corresponding to docs.
+        """
         pass
 
     def get_score_of_docs(self, user_id, docs):
-        """Get similar items to the user profile based on cosine similarityself.
+        """
+        Get similar items to the user profile based on cosine similarityself.
 
         Arguments:
             user_id {int} -- the user id.
@@ -182,7 +236,8 @@ class ContentedBasedModel(BaseModel):
         return item_id_to_strength_weight_score
     
     def recommend_items(self, person_id, docs, articles_df, items_to_ignore=[], topn=10):
-        """Recommend items to person with person_idself.
+        """
+        Recommend items to person with person_idself.
 
         Arguments:
             person_id {int} -- person id.
