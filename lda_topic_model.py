@@ -18,6 +18,9 @@ import spacy
 from pathlib import Path
 import pickle
 import json
+import sklearn
+from sklearn.metrics.pairwise import cosine_similarity
+
 
 
 class LdaTopicModel(BaseModel):
@@ -54,7 +57,7 @@ class LdaTopicModel(BaseModel):
     def runModel(self):
         pass
 
-    def _utility(self, docs):
+    def _preprocess_data(self, docs):
         """Preprocess Data by using methods in utility module.
 
         Arguments:
@@ -87,7 +90,7 @@ class LdaTopicModel(BaseModel):
         if not outputFolderPath.exists():
             outputFolderPath.mkdir()
 
-        # docs_words = self._utility(docs)
+        # docs_words = self._preprocess_data(docs)
 
         if (outputFolderPath / "bigram").exists() and (outputFolderPath / "trigram").exists():
             print("load n-gram...")
@@ -217,7 +220,7 @@ class LdaTopicModel(BaseModel):
         self._prepare_data_for_training(docs)
 
         if outputFilePath.exists():
-            print("model existed in {}".format(str(outputFilePath)))
+            print("loaded model from {}".format(str(outputFilePath)))
             if self.model_type == "mallet":
                 self.optimal_model = gensim.models.wrappers.ldamallet.LdaMallet.load(
                     str(outputFilePath))
@@ -246,8 +249,44 @@ class LdaTopicModel(BaseModel):
         print("The max coherence of the best model: ", max_coherence)
         print("The number of topics of the best model: ", best_topics_num)
 
-    def get_items_profiles(self, user_id, articles_df,
-                                          interactions_full_df):
+    def _get_embedding(self, doc):
+        embedding = self.optimal_model[doc]
+        # print(embedding)
+        return embedding
+
+    def _get_item_profile(self, doc):
+        item_profile = self._get_embedding(doc)
+
+        return item_profile
+
+    def get_items_profiles(self, docs):
+        print(len(docs))
+        items_contents_words = self._preprocess_data(docs)
+        corpus_list = utility.make_trigrams(self.trigram_model, items_contents_words)
+        corpus_bow_list = [self.id2word.doc2bow(corpus) for corpus in corpus_list]
+
+        print("starting...")
+        items_profiles_list = [self._get_item_profile(corpus_bow) for corpus_bow in corpus_bow_list]
+        items_profiles = utility.transform_to_sparse_matrix(items_profiles_list)
+
+        print("ending...")
+        return items_profiles
+
+    def load_items_profiles(self, items_ids, articles_df):
+        corpus_indexes = []
+        for item_id in items_ids:
+            index = articles_df[articles_df['contentId']
+                                == item_id].index.tolist()
+            corpus_indexes += index
+        
+        docs_topics_distributions = list(self.optimal_model.load_document_topics())
+
+        items_profiles_list = [docs_topics_distributions[corpus_index] for corpus_index in corpus_indexes]
+        items_profiles = utility.transform_to_sparse_matrix(items_profiles_list)
+
+        return items_profiles
+
+    def get_user_profile(self, user_id, interactions_full_df, articles_df):
         """Get dataframe with whole information involving topics and docs.
 
         Arguments:
@@ -263,134 +302,90 @@ class LdaTopicModel(BaseModel):
         if not outputFolderPath.exists():
             outputFolderPath.mkdir()
         
-        contentIds = interactions_full_df[interactions_full_df['personId']
-                                          == user_id]['contentId'].tolist()
-        corpus_indexes = []
-        for contentId in contentIds:
-            index = articles_df[articles_df['contentId']
-                                == contentId].index.tolist()
-            corpus_indexes += index
+        items_ids, items_contents = utility.get_items(user_id, interactions_full_df, articles_df)
+        # contentIds = interactions_full_df[interactions_full_df['personId']
+        #                                   == user_id]['contentId'].tolist()
 
-        corpus = [self.corpus[corpus_index] for corpus_index in corpus_indexes]
-        corpus_bow = [self.corpus_bow[corpus_index]
-                      for corpus_index in corpus_indexes]
-
-        # test
-        # doc = articles_df.loc[corpus_indexes[0]].text
-        # cp = self.corpus[corpus_indexes[0]]
-        # print("test")
-        # print(doc)
-        # print(cp)
-
-        user_contents_strength_df = interactions_full_df[
-            interactions_full_df['personId'] == user_id]
-
-        items_profiles = pd.DataFrame()
-
-        # find one dominant topic for each document
-        for row in self.optimal_model[corpus_bow]:
-            row = sorted(row, key=lambda x: x[1], reverse=True)
-            # get topic number, confidence, and keywords
-            for j, (topic_id, prop_topic) in enumerate(row):
-                if j == 0:
-                    word_distribution = self.optimal_model.show_topic(
-                        topic_id)
-                    topic_keywords = ", ".join(
-                        [word for word, prop in word_distribution])
-                    items_profiles = items_profiles.append(pd.Series(
-                        [int(topic_id), round(prop_topic, 4), topic_keywords]),
-                        ignore_index=True)
-                else:
-                    break
-        items_profiles.columns = [
-            'Dominant_Topic', 'Perc_Contribution', 'Topic_Keywords']
-
-        # Append the original text to the data frame
-        contents = pd.Series(corpus)
-        contentIds = pd.Series(contentIds)
-        items_profiles = pd.concat(
-            [items_profiles, contentIds, contents], axis=1)
-        items_profiles = items_profiles.reset_index()
-        items_profiles.columns = [
-            'Document_No', 'Dominant_Topic', 'Topic_Perc_Contrib', 'Keywords',
-            'contentId', 'Text']
-
-        items_profiles = items_profiles.merge(
-            user_contents_strength_df[[
-                "contentId", "eventStrength"]], how="left",
-            left_on="contentId", right_on="contentId")
-        items_profiles.columns = [
-            'Document_No', 'Dominant_Topic', 'Topic_Perc_Contrib', 'Keywords',
-            'Content_Id', 'Text', "Strength"]
-        
-        outputFilePath = outputFolderPath / str(user_id) + ".pkl"
-        items_profiles.to_pickle(str(outputFilePath))
-
-        return items_profiles
-
-    def _get_topics_to_cnt_norm(self, items_profiles):
-        """Get weight based on the number of docs related to each topic.
-        
-        Arguments:
-            items_profiles {pandas.DataFrame} -- the dataframe with information.
-        
-        Returns:
-            dict -- topic_id -> number of related docs.
-        """
-
-        topics_to_cnt = items_profiles['Dominant_Topic'].value_counts(
-            normalize=True).to_dict()
-
-        topics_to_cnt = dict([(int(key), value)
-                              for key, value in topics_to_cnt.items()])
-
-        return topics_to_cnt
-
-    def _get_topics_to_strength_norm(self, items_profiles):
-        """Get weight based on the strength of docs related to each topic.
-        
-        Arguments:
-            items_profiles {pandas.DataFrame} -- the dataframe with information.
-        
-        Returns:
-            dict -- topic_id -> strength
-        """
-
-        topics_to_strength = items_profiles.groupby(
-            ['Dominant_Topic'])['Strength'].sum().to_dict()
-
-        total = sum(topics_to_strength.values())
-        topics_to_strength = dict([(int(key), value / total)
-                                   for key, value in topics_to_strength.items()])
-
-        return topics_to_strength
-
-    def get_user_profile(self, user_id, articles_df, interactions_full_df):
-        """Generate profile for user_id.
-        
-        Arguments:
-            user_id {int} -- the user id.
-            articles_df {pandas.DataFrame} -- the articles dataframe.
-            interactions_full_df {pandas.DataFrame} -- the interactions dataframe.
-        """
-
-        outputFolderPath = self.outputRootPath / \
-            (self.model_type + "_model") / "profiles"
-        if not outputFolderPath.exists():
-            outputFolderPath.mkdir()
-
-        items_profiles = self.get_items_profiles(
-            user_id, articles_df, interactions_full_df)
-
-        topics_to_cnt_norm = self._get_topics_to_cnt_norm(
-            items_profiles)
-        with (outputFolderPath / (str(user_id) + "_cnt_norm.pkl")).open("wb") as fp:
-            pickle.dump(topics_to_cnt_norm, fp)
-
-        topics_to_strength_norm = self._get_topics_to_strength_norm(
-            items_profiles)
+        items_profiles = self.load_items_profiles(items_ids, articles_df)
+        print(items_profiles.shape)
+        user_items_strengths = utility.get_weight(user_id, interactions_full_df, items_ids)
+        # print(user_items_strengths)
+        user_items_strengths = np.array(user_items_strengths).reshape(-1, 1)
+        print(user_items_strengths.shape)
+        user_items_strengths_weighted_avg = np.sum(items_profiles.multiply(
+            user_items_strengths), axis=0) / np.sum(user_items_strengths)
+        user_profile_strength_norm = sklearn.preprocessing.normalize(
+            user_items_strengths_weighted_avg)
         with (outputFolderPath / (str(user_id) + "_strength_norm.pkl")).open("wb") as fp:
-            pickle.dump(topics_to_strength_norm, fp)
+            pickle.dump(user_profile_strength_norm, fp)
+
+        return user_profile_strength_norm
+
+  
+
+    # def _get_topics_to_cnt_norm(self, items_profiles):
+    #     """Get weight based on the number of docs related to each topic.
+        
+    #     Arguments:
+    #         items_profiles {pandas.DataFrame} -- the dataframe with information.
+        
+    #     Returns:
+    #         dict -- topic_id -> number of related docs.
+    #     """
+
+    #     topics_to_cnt = items_profiles['Dominant_Topic'].value_counts(
+    #         normalize=True).to_dict()
+
+    #     topics_to_cnt = dict([(int(key), value)
+    #                           for key, value in topics_to_cnt.items()])
+
+    #     return topics_to_cnt
+
+    # def _get_topics_to_strength_norm(self, items_profiles):
+    #     """Get weight based on the strength of docs related to each topic.
+        
+    #     Arguments:
+    #         items_profiles {pandas.DataFrame} -- the dataframe with information.
+        
+    #     Returns:
+    #         dict -- topic_id -> strength
+    #     """
+
+    #     topics_to_strength = items_profiles.groupby(
+    #         ['Dominant_Topic'])['Strength'].sum().to_dict()
+
+    #     total = sum(topics_to_strength.values())
+    #     topics_to_strength = dict([(int(key), value / total)
+    #                                for key, value in topics_to_strength.items()])
+
+    #     return topics_to_strength
+
+    # def get_user_profile(self, user_id, articles_df, interactions_full_df):
+    #     """Generate profile for user_id.
+        
+    #     Arguments:
+    #         user_id {int} -- the user id.
+    #         articles_df {pandas.DataFrame} -- the articles dataframe.
+    #         interactions_full_df {pandas.DataFrame} -- the interactions dataframe.
+    #     """
+
+    #     outputFolderPath = self.outputRootPath / \
+    #         (self.model_type + "_model") / "profiles"
+    #     if not outputFolderPath.exists():
+    #         outputFolderPath.mkdir()
+
+    #     items_profiles = self.get_items_profiles(
+    #         user_id, articles_df, interactions_full_df)
+
+    #     topics_to_cnt_norm = self._get_topics_to_cnt_norm(
+    #         items_profiles)
+    #     with (outputFolderPath / (str(user_id) + "_cnt_norm.pkl")).open("wb") as fp:
+    #         pickle.dump(topics_to_cnt_norm, fp)
+
+    #     topics_to_strength_norm = self._get_topics_to_strength_norm(
+    #         items_profiles)
+    #     with (outputFolderPath / (str(user_id) + "_strength_norm.pkl")).open("wb") as fp:
+    #         pickle.dump(topics_to_strength_norm, fp)
 
     def load_user_profile(self, user_id):
         """Load the profile for user_id.
@@ -405,12 +400,11 @@ class LdaTopicModel(BaseModel):
 
         outputFolderPath = self.outputRootPath / \
             (self.model_type + "_model") / "profiles"
-        with (outputFolderPath / (str(user_id) + "_cnt_norm.pkl")).open("rb") as fp:
-            topics_to_cnt_norm = pickle.load(fp)
-        with (outputFolderPath / (str(user_id) + "_strength_norm.pkl")).open("rb") as fp:
-            topics_to_strength_norm = pickle.load(fp)
 
-        return topics_to_cnt_norm, topics_to_strength_norm
+        with (outputFolderPath / (str(user_id) + "_strength_norm.pkl")).open("rb") as fp:
+            user_profile_strength_norm = pickle.load(fp)
+
+        return user_profile_strength_norm
 
     def get_score_of_docs(self, user_id, docs):
         """Get the socore for new incoming docs based on profile.
@@ -425,30 +419,19 @@ class LdaTopicModel(BaseModel):
                       doc_id -> score weighted by strength)
         """
 
-        doc_ids, docs = zip(*docs)
+        user_profile_strength_norm = self.load_user_profile(user_id)
 
-        user_profile_cnt_norm, user_profile_strength_norm = self.load_user_profile(
-            user_id)
-        topics = set(list(user_profile_cnt_norm))
+        items_ids, items_contents = zip(*docs)
 
-        docs_words = self._utility(docs)
-        corpus = utility.make_trigrams(self.trigram_model, docs_words)
-        corpus_bow = [self.id2word.doc2bow(doc) for doc in corpus]
+        items_profiles = self.get_items_profiles(items_contents)
 
-        doc_id_to_cnt_weight_score = {}
-        doc_id_to_strength_weight_score = {}
-        for doc_id, row in zip(doc_ids, self.optimal_model[corpus_bow]):
-            row = list(filter(lambda x: x[0] in topics, row))
-            # get topic number, confidence, and keywords
-            cnt_weight_score = 0
-            strength_weight_score = 0
-            for topic_id, prop_topic in row:
-                cnt_weight_score += user_profile_cnt_norm[topic_id] * prop_topic
-                strength_weight_score += user_profile_strength_norm[topic_id] * prop_topic
-            doc_id_to_cnt_weight_score[doc_id] = cnt_weight_score
-            doc_id_to_strength_weight_score[doc_id] = strength_weight_score
+        cosine_similarities = cosine_similarity(
+            user_profile_strength_norm, items_profiles)
 
-        return doc_id_to_cnt_weight_score, doc_id_to_strength_weight_score
+        item_id_to_strength_weight_score = [(items_ids[i], cosine_similarities[0, i])
+                                            for i in range(cosine_similarities.shape[1])]
+
+        return item_id_to_strength_weight_score
 
     def recommend_items(self, user_id, docs, articles_df, items_to_ignore=[],
                         topn=10, verbose=False):
@@ -471,17 +454,15 @@ class LdaTopicModel(BaseModel):
             pandas.Dataframe -- the dataframe of recommended items with information.
         """
 
-        doc_id_to_cnt_weight_score, \
-            doc_id_to_strength_weight_score = self.get_score_of_docs(
+        item_id_to_strength_weight_score = self.get_score_of_docs(
                 user_id, docs)
 
-        doc_id_to_cnt_weight_score = sorted(
-            doc_id_to_cnt_weight_score.items(), key=lambda x: x[1], reverse=True)
-        doc_id_to_strength_weight_score = sorted(
-            doc_id_to_strength_weight_score.items(), key=lambda x: x[1], reverse=True)
+        item_id_to_strength_weight_score.sort(key=lambda x: x[1], reverse=True)
+        similar_items_filter = list(
+            filter(lambda x: x[0] not in items_to_ignore, item_id_to_strength_weight_score))
         # filter out the items that are already interacted
         similar_items_filter = list(
-            filter(lambda x: x[0] not in items_to_ignore, doc_id_to_cnt_weight_score))
+            filter(lambda x: x[0] not in items_to_ignore, item_id_to_strength_weight_score))
 
         recommendations_df = pd.DataFrame(similar_items_filter, columns=[
                                           "contentId", "recStrength"]).head(topn)
