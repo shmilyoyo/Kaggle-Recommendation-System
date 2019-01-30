@@ -32,6 +32,7 @@ class TfidfBasedModel(ContentedBasedModel):
         self.nlp = spacy.load('en', disable=['parser', 'ner'])
         self.model_type = "tfidf"
         self.model = None
+        self.items_profiles = None
 
     def get_model_name(self):
         return self.MODEL_NAME
@@ -72,11 +73,6 @@ class TfidfBasedModel(ContentedBasedModel):
         outputFolderPath = self.outputRootPath / \
             (self.model_type + "_model")
 
-        if (outputFolderPath / "model.pkl").exists():
-            with (outputFolderPath / "model.pkl").open("rb") as fp:
-                self.model = pickle.load(fp)
-                print("model loaded from {}".format(str(outputFolderPath / "model.pkl")))
-            return
         if not outputFolderPath.exists():
             outputFolderPath.mkdir()
 
@@ -87,10 +83,24 @@ class TfidfBasedModel(ContentedBasedModel):
                                      max_df=0.5,
                                      max_features=5000)
 
-        self.model = vectorizer.fit(docs)
+        items_profiles = vectorizer.fit_transform(docs)
+        with (outputFolderPath / "items_profiles.pkl").open("wb") as fp:
+            pickle.dump(items_profiles, fp)
+
+        self.model = vectorizer
         with (outputFolderPath / "model.pkl").open("wb") as fp:
             pickle.dump(self.model, fp)
         # self.model = model
+
+    def load_model(self):
+        outputFolderPath = self.outputRootPath / (self.model_type + "_model")
+
+        if (outputFolderPath / "model.pkl").exists():
+            with (outputFolderPath / "model.pkl").open("rb") as fp:
+                self.model = pickle.load(fp)
+                print("model loaded from {}".format(str(outputFolderPath / "model.pkl")))
+        else:
+            raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), str(outputFolderPath / "model.pkl"))
 
     def _get_embedding(self, doc):
         """Get embedding representation for doc text.
@@ -138,6 +148,26 @@ class TfidfBasedModel(ContentedBasedModel):
 
         return items_profiles
 
+    def load_items_profiles(self, items_ids, articles_df):
+        outputFolderPath = self.outputRootPath / (self.model_type + "_model")
+
+        if (outputFolderPath / "items_profiles.pkl").exists():
+            with (outputFolderPath / "items_profiles.pkl").open("rb") as fp:
+                items_profiles = pickle.load(fp)
+        else:
+            raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), str(outputFolderPath / "items_profiles.pkl"))
+
+        items_profiles_indexes = []
+        for item_id in items_ids:
+            index = articles_df[articles_df['contentId']
+                                == item_id].index.tolist()
+            items_profiles_indexes += index
+
+        items_profiles_list = [items_profiles[item_profile_index] for item_profile_index in items_profiles_indexes]
+        items_profiles = scipy.sparse.vstack(items_profiles_list)
+
+        return items_profiles
+
     def get_user_profile(self, user_id, interactions_full_df, articles_df):
         """Build a user profile based on the normalization.
 
@@ -156,16 +186,18 @@ class TfidfBasedModel(ContentedBasedModel):
         if not outputFolderPath.exists():
             outputFolderPath.mkdir()
 
-        items_ids, items_contents = utility.get_items(
+        items_ids = utility.get_items_ids(
             user_id, interactions_full_df, articles_df)
 
-        items_profiles = self.get_items_profiles(items_contents)
+        items_profiles = self.load_items_profiles(items_ids, articles_df)
+        print(items_profiles.shape)
 
         # average weight the matrix
         user_items_strengths = utility.get_weight(
             user_id, interactions_full_df, items_ids)
 
         user_items_strengths = np.array(user_items_strengths).reshape(-1, 1)
+        print(user_items_strengths.shape)
 
         user_items_strengths_weighted_avg = np.sum(items_profiles.multiply(
             user_items_strengths), axis=0) / np.sum(user_items_strengths)
@@ -217,8 +249,7 @@ class TfidfBasedModel(ContentedBasedModel):
 
         return item_id_to_strength_weight_score
 
-    def recommend_items(self, person_id, docs, articles_df, items_to_ignore=[], topn=10,
-                        verbose=False):
+    def recommend_items(self, person_id, docs, articles_df, items_to_ignore=[], topn=10):
         """Recommend items to person with person_idself.
 
         Arguments:
@@ -246,11 +277,7 @@ class TfidfBasedModel(ContentedBasedModel):
         recommendations_df = pd.DataFrame(similar_items_filter, columns=[
                                           "contentId", "recStrength"]).head(topn)
 
-        if verbose:
-            if articles_df is None:
-                raise Exception("articles_df is required in verbose mode.")
-
-            recommendations_df = recommendations_df.merge(articles_df,
+        recommendations_df = recommendations_df.merge(articles_df,
                                                           how="left",
                                                           left_on="contentId",
                                                           right_on="contentId"

@@ -20,7 +20,8 @@ import pickle
 import json
 import sklearn
 from sklearn.metrics.pairwise import cosine_similarity
-
+import errno
+import os
 
 
 class LdaTopicModel(BaseModel):
@@ -92,16 +93,9 @@ class LdaTopicModel(BaseModel):
 
         # docs_words = self._preprocess_data(docs)
 
-        if (outputFolderPath / "bigram").exists() and (outputFolderPath / "trigram").exists():
-            print("load n-gram...")
-            bigram = gensim.models.phrases.Phraser.load(
-                str(outputFolderPath / "bigram"))
-            trigram = gensim.models.phrases.Phraser.load(
-                str(outputFolderPath / "trigram"))
-        else:
-            bigram, trigram = utility.build_n_gram(docs_words)
-            bigram.save(str(outputFolderPath / "bigram"))
-            trigram.save(str(outputFolderPath / "trigram"))
+        bigram, trigram = utility.build_n_gram(docs_words)
+        bigram.save(str(outputFolderPath / "bigram"))
+        trigram.save(str(outputFolderPath / "trigram"))
 
         self.bigram_model = gensim.models.phrases.Phraser(bigram)
         self.trigram_model = gensim.models.phrases.Phraser(trigram)
@@ -109,32 +103,17 @@ class LdaTopicModel(BaseModel):
         # docs_words_trigram = utility.make_trigrams(
         #     self.trigram_model, docs_words)
 
-        if (outputFolderPath / 'dictionary').exists():
-            print("load dictionary...")
-            self.id2word = gensim.corpora.dictionary.Dictionary.load(
-                str(outputFolderPath / 'dictionary'))
-        else:
-            self.id2word = corpora.Dictionary(docs_words_trigram)
-            self.id2word.save(str(outputFolderPath / 'dictionary'))
+        self.id2word = corpora.Dictionary(docs_words_trigram)
+        self.id2word.save(str(outputFolderPath / 'dictionary'))
 
-        if (outputFolderPath / 'corpus.pkl').exists():
-            print("load corpus.pkl...")
-            with (outputFolderPath / 'corpus.pkl').open("rb") as fp:
-                self.corpus = pickle.load(fp)
-        else:
-            self.corpus = docs_words_trigram
-            with (outputFolderPath / 'corpus.pkl').open("wb") as fp:
-                pickle.dump(self.corpus, fp)
+        self.corpus = docs_words_trigram
+        with (outputFolderPath / 'corpus.pkl').open("wb") as fp:
+            pickle.dump(self.corpus, fp)
 
-        if (outputFolderPath / 'corpus_bow.pkl').exists():
-            print("load corpus_bow.pkl...")
-            with (outputFolderPath / 'corpus_bow.pkl').open("rb") as fp:
-                self.corpus_bow = pickle.load(fp)
-        else:
-            self.corpus_bow = [self.id2word.doc2bow(
-                doc) for doc in self.corpus]
-            with (outputFolderPath / 'corpus_bow.pkl').open("wb") as fp:
-                pickle.dump(self.corpus_bow, fp)
+        self.corpus_bow = [self.id2word.doc2bow(
+            doc) for doc in self.corpus]
+        with (outputFolderPath / 'corpus_bow.pkl').open("wb") as fp:
+            pickle.dump(self.corpus_bow, fp)
 
     def _compute_coherence_values(self, limit, start=2, step=2):
         """Compute the coherence values for topic model with different topic number.
@@ -214,25 +193,13 @@ class LdaTopicModel(BaseModel):
         """
 
         outputFolderPath = self.outputRootPath / (self.model_type + "_model")
-        outputFilePath = outputFolderPath / "optimal_model"
 
         print("Preparing data for training...")
         self._prepare_data_for_training(docs)
 
-        if outputFilePath.exists():
-            print("loaded model from {}".format(str(outputFilePath)))
-            if self.model_type == "mallet":
-                self.optimal_model = gensim.models.wrappers.ldamallet.LdaMallet.load(
-                    str(outputFilePath))
-                return
-            if self.model_type == "default":
-                self.optimal_model = gensim.models.ldamodel.LdaModel.load(
-                    str(outputFilePath))
-                return
         if not outputFolderPath.exists():
             outputFolderPath.mkdir()
 
-        print("Start training...")
         model_list, coherence_values = self._compute_coherence_values(
             limit, start, step)
 
@@ -246,8 +213,63 @@ class LdaTopicModel(BaseModel):
                 self.optimal_model = model
 
         self.optimal_model.save(str(outputFolderPath / "optimal_model"))
+
+        items_profiles = self.optimal_model.load_document_topics()
+        with (outputFolderPath / "items_profiles.pkl").open("wb") as fp:
+            pickle.dump(items_profiles, fp)
+
         print("The max coherence of the best model: ", max_coherence)
         print("The number of topics of the best model: ", best_topics_num)
+
+    def load_model(self):
+        outputFolderPath = self.outputRootPath / (self.model_type + "_model")
+
+        if (outputFolderPath / "optimal_model").exists():
+            print("loaded model from {}".format(str(outputFolderPath / "optimal_model")))
+            if self.model_type == "mallet":
+                self.optimal_model = gensim.models.wrappers.ldamallet.LdaMallet.load(
+                    str(outputFolderPath / "optimal_model"))
+            if self.model_type == "default":
+                self.optimal_model = gensim.models.ldamodel.LdaModel.load(
+                    str(outputFolderPath / "optimal_model"))
+        else:
+            raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), str(outputFolderPath / "optimal_model"))
+        
+        if (outputFolderPath / "bigram").exists() and (outputFolderPath / "trigram").exists():
+            print("load n-gram...")
+            bigram = gensim.models.phrases.Phraser.load(
+                str(outputFolderPath / "bigram"))
+            trigram = gensim.models.phrases.Phraser.load(
+                str(outputFolderPath / "trigram"))
+
+            self.bigram_model = gensim.models.phrases.Phraser(bigram)
+            self.trigram_model = gensim.models.phrases.Phraser(trigram)
+        else:
+            raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), str(outputFolderPath / "bigram"))
+            
+        
+        if (outputFolderPath / 'dictionary').exists():
+            print("load dictionary...")
+            self.id2word = gensim.corpora.dictionary.Dictionary.load(
+                str(outputFolderPath / 'dictionary'))
+        else:
+            raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), str(outputFolderPath / 'dictionary'))
+            
+        
+        if (outputFolderPath / 'corpus.pkl').exists():
+            print("load corpus.pkl...")
+            with (outputFolderPath / 'corpus.pkl').open("rb") as fp:
+                self.corpus = pickle.load(fp)
+        else:
+            raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), str(outputFolderPath / 'corpus.pkl'))
+            
+        
+        if (outputFolderPath / 'corpus_bow.pkl').exists():
+            print("load corpus_bow.pkl...")
+            with (outputFolderPath / 'corpus_bow.pkl').open("rb") as fp:
+                self.corpus_bow = pickle.load(fp)
+        else:
+            raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), str(outputFolderPath / 'corpus_bow.pkl'))
 
     def _get_embedding(self, doc):
         embedding = self.optimal_model[doc]
@@ -260,19 +282,24 @@ class LdaTopicModel(BaseModel):
         return item_profile
 
     def get_items_profiles(self, docs):
-        print(len(docs))
         items_contents_words = self._preprocess_data(docs)
         corpus_list = utility.make_trigrams(self.trigram_model, items_contents_words)
         corpus_bow_list = [self.id2word.doc2bow(corpus) for corpus in corpus_list]
 
-        print("starting...")
         items_profiles_list = [self._get_item_profile(corpus_bow) for corpus_bow in corpus_bow_list]
-        items_profiles = utility.transform_to_sparse_matrix(items_profiles_list)
+        items_profiles = utility.transform_tuple_to_sparse_matrix(items_profiles_list)
 
-        print("ending...")
         return items_profiles
 
     def load_items_profiles(self, items_ids, articles_df):
+        outputFolderPath = self.outputRootPath / (self.model_type + "_model")
+
+        if (outputFolderPath / "items_profiles.pkl").exists():
+            with (outputFolderPath / "items_profiles.pkl").open("wb") as fp:
+                items_profiles = pickle.load(fp)
+        else:
+            raise Exception("items_profiles is not in {}.".format(str(outputFolderPath)))
+
         corpus_indexes = []
         for item_id in items_ids:
             index = articles_df[articles_df['contentId']
@@ -282,7 +309,7 @@ class LdaTopicModel(BaseModel):
         docs_topics_distributions = list(self.optimal_model.load_document_topics())
 
         items_profiles_list = [docs_topics_distributions[corpus_index] for corpus_index in corpus_indexes]
-        items_profiles = utility.transform_to_sparse_matrix(items_profiles_list)
+        items_profiles = utility.transform_tuple_to_sparse_matrix(items_profiles_list)
 
         return items_profiles
 
@@ -302,7 +329,7 @@ class LdaTopicModel(BaseModel):
         if not outputFolderPath.exists():
             outputFolderPath.mkdir()
         
-        items_ids, items_contents = utility.get_items(user_id, interactions_full_df, articles_df)
+        items_ids = utility.get_items_ids(user_id, interactions_full_df, articles_df)
         # contentIds = interactions_full_df[interactions_full_df['personId']
         #                                   == user_id]['contentId'].tolist()
 
@@ -433,8 +460,7 @@ class LdaTopicModel(BaseModel):
 
         return item_id_to_strength_weight_score
 
-    def recommend_items(self, user_id, docs, articles_df, items_to_ignore=[],
-                        topn=10, verbose=False):
+    def recommend_items(self, user_id, docs, articles_df, items_to_ignore=[], topn=10):
         """Recommend new incoming items to user_id.
         
         Arguments:
@@ -467,17 +493,13 @@ class LdaTopicModel(BaseModel):
         recommendations_df = pd.DataFrame(similar_items_filter, columns=[
                                           "contentId", "recStrength"]).head(topn)
 
-        if verbose:
-            if articles_df is None:
-                raise Exception("articles_df is required in verbose mode.")
-
-            recommendations_df = recommendations_df.merge(articles_df,
-                                                          how="left",
-                                                          left_on="contentId",
-                                                          right_on="contentId"
-                                                          )[["recStrength",
-                                                             "contentId",
-                                                             "title",
-                                                             "url",
-                                                             "lang"]]
+        recommendations_df = recommendations_df.merge(articles_df,
+                                                        how="left",
+                                                        left_on="contentId",
+                                                        right_on="contentId"
+                                                        )[["recStrength",
+                                                            "contentId",
+                                                            "title",
+                                                            "url",
+                                                            "lang"]]
         return recommendations_df

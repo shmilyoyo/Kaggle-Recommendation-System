@@ -224,17 +224,15 @@ def get_weight(user_id, interactions_full_df, items_ids):
                                                         == item_id]['eventStrength'].tolist()
     return user_items_strengths
 
-def get_items(user_id, interactions_full_df, articles_df):
+def get_items_ids(user_id, interactions_full_df, articles_df):
     interactions_person_df = interactions_full_df[interactions_full_df['personId'] == user_id]
 
     contentIds = interactions_person_df['contentId'].tolist()
     items_df = articles_df[articles_df['contentId'].isin(contentIds)]
-    items_dict = pd.Series(
-        items_df['text'].values, index=items_df['contentId']).to_dict()
-    items_ids, items_contents = zip(*list(items_dict.items()))
-    return items_ids, items_contents
+    items_ids = items_df['contentId'].tolist()
+    return items_ids
 
-def transform_to_sparse_matrix(items_profiles_list):
+def transform_tuple_to_sparse_matrix(items_profiles_list):
     feature_to_number = [dict(items_profile) for items_profile in items_profiles_list]
     feature_to_number_df = pd.DataFrame(feature_to_number)
     sparse_matrix = scipy.sparse.csr_matrix(feature_to_number_df.values)
