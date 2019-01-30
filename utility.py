@@ -233,3 +233,9 @@ def get_items(user_id, interactions_full_df, articles_df):
         items_df['text'].values, index=items_df['contentId']).to_dict()
     items_ids, items_contents = zip(*list(items_dict.items()))
     return items_ids, items_contents
+
+def transform_to_sparse_matrix(items_profiles_list):
+    feature_to_number = [dict(items_profile) for items_profile in items_profiles_list]
+    feature_to_number_df = pd.DataFrame(feature_to_number)
+    sparse_matrix = scipy.sparse.csr_matrix(feature_to_number_df.values)
+    return sparse_matrix
