@@ -124,24 +124,22 @@ new_docs = random.sample(list(ids_to_contents.items()), 10)
 # # ldaTm.generate_profile(user_id, articles_df, interactions_full_df)
 
 # test tidif_based_model
-tfidf_model = TfidfBasedModel(
-    "content-based", outputDataRootPath)
+# tfidf_model = TfidfBasedModel("tfidf", outputDataRootPath)
 # tfidf_model.train_model(corpus)
-tfidf_model.load_model()
-print(tfidf_model.get_user_profile(user_id, interactions_full_df, articles_df))
-docs_to_scores = tfidf_model.get_score_of_docs(user_id, new_docs)
-print(docs_to_scores)
-recommend_df = tfidf_model.recommend_items(user_id, new_docs, articles_df, verbose=True)
-print(recommend_df)
+# tfidf_model.load_model()
+# print(tfidf_model.get_user_profile(user_id, interactions_full_df, articles_df))
+# docs_to_scores = tfidf_model.get_score_of_docs(user_id, new_docs)
+# print(docs_to_scores)
+# recommend_df = tfidf_model.recommend_items(user_id, new_docs, articles_df)
+# print(recommend_df)
 # print(tfidf_model.model.get_feature_names())
 
 # # test lda_topic_model
-# model_path = "/home/xuhao/Library/mallet-2.0.8/bin/mallet"
-# ldaTm = LdaTopicModel("LDA_Topic_Model", outputDataRootPath,
-#                       model_type="mallet", model_path=model_path)
+model_path = "/home/xuhao/Library/mallet-2.0.8/bin/mallet"
+ldaTm = LdaTopicModel("mallet", outputDataRootPath, model_path=model_path)
 # # ldaTm.train_model(corpus, 24, 2, 2)
-# ldaTm.load_model()
-# # print(ldaTm.get_user_profile(user_id, interactions_full_df, articles_df))
+ldaTm.load_model()
+# print(ldaTm.get_user_profile(user_id, interactions_full_df, articles_df))
 # print(ldaTm.get_score_of_docs(user_id, new_docs))
-# recommend_df = ldaTm.recommend_items(user_id, new_docs, articles_df, verbose=True)
-# print(recommend_df)
+recommend_df = ldaTm.recommend_items(user_id, new_docs, articles_df)
+print(recommend_df)

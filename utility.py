@@ -1,19 +1,18 @@
-import numpy as np
-import scipy
-import pandas as pd
 import math
-import random
-import sklearn
-from sklearn.model_selection import train_test_split
-from nltk.corpus import stopwords
-from sklearn.metrics.pairwise import cosine_similarity
-from scipy.sparse.linalg import svds
+import re
 from pathlib import Path
+
+import numpy as np
+import pandas as pd
+import scipy
+import sklearn
 from nltk.corpus import stopwords
+from scipy.sparse.linalg import svds
+from sklearn.model_selection import train_test_split
+
 import gensim
 import gensim.corpora as corpora
 from gensim.utils import simple_preprocess
-import re
 
 
 def mungingData(inputDataRootPath, outputDataRootPath):
