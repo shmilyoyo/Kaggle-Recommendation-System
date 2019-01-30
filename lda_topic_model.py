@@ -298,7 +298,7 @@ class LdaTopicModel(BaseModel):
             pandas.DataFrame -- the dataframe with while information involving
                                 topics and docs.
         """
-        outputFolderPath = self.outputRootPath / (self.model_type + "_model") / "information"
+        outputFolderPath = self.outputRootPath / (self.model_type + "_model") / "profiles"
         if not outputFolderPath.exists():
             outputFolderPath.mkdir()
         
